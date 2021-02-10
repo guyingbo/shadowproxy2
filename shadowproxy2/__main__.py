@@ -4,8 +4,9 @@ import click
 from .server import run_server
 from .urlparser import URLVisitor, grammar
 from .context import ProxyContext
+from .config import config
 
-url_format = "[transport+]proxy://[username:password@][host]:port[?key=value]"
+url_format = "[transport+]proxy://[username:password@][host]:port[#key=value]"
 
 
 class URLParamType(click.ParamType):
@@ -50,7 +51,28 @@ def validate(ctx, url: str):
     type=URL,
     help="default to direct connect",
 )
-def main(ingress, egress):
+@click.option(
+    "--cert-chain",
+    default="/Users/mac/Projects/aioquic/tests/ssl_cert.pem",
+    type=click.Path(exists=True),
+    help="certificate chain file path",
+)
+@click.option(
+    "--key-file",
+    default="/Users/mac/Projects/aioquic/tests/ssl_key.pem",
+    type=click.Path(exists=True),
+    help="private key file path",
+)
+@click.option(
+    "--ca-cert",
+    default="/Users/mac/Projects/aioquic/tests/pycacert.pem",
+    type=click.Path(exists=True),
+    help="CA certificate file path",
+)
+def main(ingress, egress, cert_chain, key_file, ca_cert):
+    config.cert_chain = cert_chain
+    config.key_file = key_file
+    config.ca_cert = ca_cert
     egress_dict = {getattr(ns, "name", str(i + 1)): ns for i, ns in enumerate(egress)}
     ctx_list = [
         ProxyContext(

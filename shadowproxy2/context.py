@@ -10,6 +10,7 @@ from iofree.parser import AsyncioParser
 from .parsers import socks4, socks5
 from .transport.quic import QuicIngress, QuicEgress
 from .transport.tcp import TCPIngress, TCPEgress
+from .config import config
 
 
 class ProxyContext:
@@ -56,8 +57,8 @@ class ProxyContext:
     async def create_quic_server(self):
         configuration = QuicConfiguration(is_client=False)
         configuration.load_cert_chain(
-            "/Users/mac/Projects/aioquic/tests/ssl_cert.pem",
-            keyfile="/Users/mac/Projects/aioquic/tests/ssl_key.pem",
+            config.cert_chain,
+            keyfile=config.key_file,
         )
         return await aio.serve(
             self.ingress_ns.host,
@@ -90,9 +91,7 @@ class ProxyContext:
     async def create_quic_client(self, target_addr):
         if self.quic_egress is None:
             configuration = QuicConfiguration()
-            configuration.load_verify_locations(
-                "/Users/mac/Projects/aioquic/tests/pycacert.pem"
-            )
+            configuration.load_verify_locations(config.ca_cert)
             configuration.verify_mode = ssl.CERT_NONE
 
             # important: The async context manager must be hold here(reference count > 0), otherwise quic connection will be closed.
