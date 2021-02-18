@@ -13,6 +13,11 @@ from .transport.tcp import TCPIngress, TCPEgress
 from .config import config
 
 
+class NullParser:
+    def set_transport(self, transport):
+        self.transport = transport
+
+
 class ProxyContext:
     def __init__(self, ingress_ns, egress_ns):
         self.ingress_ns = ingress_ns
@@ -32,6 +37,7 @@ class ProxyContext:
 
     def create_client_parser(self, target_addr):
         if self.egress_ns is None:
+            # return NullParser()
             return None
         generator = getattr(self, f"{self.egress_ns.proxy}_client")(target_addr)
         return AsyncioParser(generator)
@@ -102,7 +108,7 @@ class ProxyContext:
                 configuration=configuration,
             )
             self.quic_egress = await self.quic_egress_acm.__aenter__()
-            await self.quic_egress.wait_handshake()
+            await self.quic_egress.wait_connected()
         return self.quic_egress.create_stream(target_addr)
 
     async def __aenter__(self):
@@ -119,8 +125,10 @@ class ProxyContext:
         ingress_stream.parser.send_event(0)
         if egress_stream.parser:
             await egress_stream.parser.responses.get()
-        egress_stream.parser = ingress_stream
+        egress_stream.data_received = ingress_stream.write
+        egress_stream.eof_received = ingress_stream.close
         data = ingress_stream.parser.readall()
         if data:
-            egress_stream.send(data)
-        ingress_stream.parser = egress_stream
+            egress_stream.write(data)
+        ingress_stream.data_received = egress_stream.write
+        ingress_stream.eof_received = egress_stream.close

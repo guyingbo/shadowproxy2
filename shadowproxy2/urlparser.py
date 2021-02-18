@@ -14,7 +14,7 @@ username    = ~r"[\w-]+"
 password    = ~r"[\w-]+"
 port        = ~r"\d+"
 pair        = key "=" value
-key         = "via" / "name" / "keyfile" / "certchain"
+key         = "via" / "name"
 value       = ~r"[\w-]+"
 """
 

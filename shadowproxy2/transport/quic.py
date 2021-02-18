@@ -25,8 +25,13 @@ class QuicIngress(QuicConnectionProtocol):
                 stream.eof_received()
                 del self._streams[event.stream_id]
         elif isinstance(event, ConnectionTerminated):
-            print(event)
+            print("client:", event)
+        elif isinstance(event, HandshakeCompleted):
+            print("client:", event)
+        else:
+            # print("server:", event)
             pass
+        super().quic_event_received(event)
 
 
 class QuicIngressStream:
@@ -45,23 +50,23 @@ class QuicIngressStream:
 
         self.task.add_done_callback(myprint)
 
-    def send(self, data):
+    def write(self, data):
         self.quic_ingress._quic.send_stream_data(self.stream_id, data, False)
         self.quic_ingress._transmit_soon()
 
-    write = send
-
     def write_eof(self):
+        print("eof")
         self.quic_ingress._quic.send_stream_data(self.stream_id, b"", end_stream=True)
         self.quic_ingress._transmit_soon()
 
     def data_received(self, data):
-        self.parser.send(data)
+        self.parser.data_received(data)
 
     def eof_received(self):
-        self.task.cancel()
+        self.parser.eof_received()
 
-    close = eof_received
+    def close(self):
+        ...
 
 
 class QuicEgress(QuicConnectionProtocol):
@@ -69,7 +74,11 @@ class QuicEgress(QuicConnectionProtocol):
         super().__init__(quic, None)
         self._streams = {}
         self.ctx = ctx
-        self._hanshake_event = asyncio.Future()
+        self.task = asyncio.create_task(self.heartbeat())
+
+    async def heartbeat(self):
+        await asyncio.sleep(5)
+        await self.ping()
 
     def quic_event_received(self, event):
         if isinstance(event, StreamDataReceived):
@@ -82,16 +91,18 @@ class QuicEgress(QuicConnectionProtocol):
                 stream.eof_received()
                 del self._streams[event.stream_id]
         elif isinstance(event, HandshakeCompleted):
-            self._hanshake_event.set_result(None)
+            pass
         elif isinstance(event, ConnectionTerminated):
-            print(event)
+            print("server:", event)
             self._streams.clear()
-
-    async def wait_handshake(self):
-        await self._hanshake_event
+        else:
+            pass
+            # print("server:", event)
+        super().quic_event_received(event)
 
     def create_stream(self, target_addr):
         stream_id = self._quic.get_next_available_stream_id()
+        self._quic._get_or_create_stream_for_send(stream_id)
         stream = QuicEgressStream(self, stream_id, target_addr)
         self._streams[stream_id] = stream
         return stream
@@ -104,16 +115,17 @@ class QuicEgressStream:
         self.ctx = quic_egress.ctx
         self.parser = self.ctx.create_client_parser(target_addr)
         self.parser.set_transport(self)
-        self.parser.send(b"")
+        self.parser.data_received(b"")
 
-    def send(self, data):
+    def write(self, data):
         self.quic_egress._quic.send_stream_data(self.stream_id, data, False)
         self.quic_egress._transmit_soon()
 
-    write = send
-
     def data_received(self, data):
-        self.parser.send(data)
+        self.parser.data_received(data)
 
     def eof_received(self):
+        self.parser.eof_received()
+
+    def close(self):
         ...

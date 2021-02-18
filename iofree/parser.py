@@ -65,21 +65,19 @@ class Parser:
         """
         parse bytes
         """
-        self.send(data)
+        self.data_received(data)
         if strict and self.has_more_data():
             raise ParseError(f"redundant data left: {self.readall()}")
         return self.get_result()
 
-    def send(self, data: typing.ByteString | memoryview = b"") -> None:
+    def data_received(self, data: typing.ByteString | memoryview = b"") -> None:
         if data:
             self.buffer.push(data)
         self._process()
 
-    def read_output_bytes(self) -> bytes:
-        buf = []
-        for to_send, close, exc, result in self:
-            buf.append(result)
-        return b"".join(buf)
+    def eof_received(self) -> None:
+        if not self.finished():
+            self.gen.throw(ParseError("eof received"))
 
     def respond(self, result) -> None:
         self.responses.append(result)

@@ -18,15 +18,18 @@ class TCPIngress(asyncio.Protocol):
         self.transport = transport
         self.parser.set_transport(transport)
 
-    def eof_received(self):
-        self.task.cancel()
-        self.transport.close()
-
     def data_received(self, data):
-        self.parser.send(data)
+        self.parser.data_received(data)
 
-    def send(self, data):
+    def eof_received(self):
+        # self.transport.close()
+        self.parser.eof_received()
+
+    def write(self, data):
         self.transport.write(data)
+
+    def close(self):
+        self.transport.close()
 
 
 class TCPEgress(asyncio.Protocol):
@@ -39,14 +42,19 @@ class TCPEgress(asyncio.Protocol):
         self.parser = self.ctx.create_client_parser(self.target_addr)
         if self.parser:
             self.parser.set_transport(transport)
-            self.parser.send(b"")
+            self.parser.data_received(b"")
 
-    def eof_received(self):
-        self.transport.close()
-
-    def send(self, data):
+    def write(self, data):
         self.transport.write(data)
 
     def data_received(self, data):
         if self.parser:
-            self.parser.send(data)
+            self.parser.data_received(data)
+
+    def eof_received(self):
+        # self.transport.close()
+        if self.parser:
+            self.parser.eof_received()
+
+    def close(self):
+        self.transport.close()
