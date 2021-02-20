@@ -26,6 +26,7 @@ class QuicIngress(QuicConnectionProtocol):
                 del self._streams[event.stream_id]
         elif isinstance(event, ConnectionTerminated):
             print("server:", event)
+            self._streams.clear()
         elif isinstance(event, HandshakeCompleted):
             print("server:", event)
         else:
@@ -78,6 +79,7 @@ class QuicEgress(QuicConnectionProtocol):
         while True:
             try:
                 await asyncio.wait_for(self._terminated_event.wait(), ping_interval)
+                return
             except asyncio.TimeoutError:
                 await self.ping()
 

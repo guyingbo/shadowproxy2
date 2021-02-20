@@ -71,7 +71,8 @@ def validate(ctx, url: str):
     type=click.Path(exists=True),
     help="CA certificate file path",
 )
-def main(ingress, egress, cert_chain, key_file, ca_cert):
+@click.option("-v", "--verbose", count=True)
+def main(ingress, egress, cert_chain, key_file, ca_cert, verbose):
     try:
         resource.setrlimit(resource.RLIMIT_NOFILE, (50000, 50000))
     except Exception:
@@ -79,6 +80,7 @@ def main(ingress, egress, cert_chain, key_file, ca_cert):
     config.cert_chain = cert_chain
     config.key_file = key_file
     config.ca_cert = ca_cert
+    config.verbose = verbose
     egress_dict = {getattr(ns, "name", str(i + 1)): ns for i, ns in enumerate(egress)}
     ctx_list = [
         ProxyContext(

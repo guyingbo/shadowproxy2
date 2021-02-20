@@ -137,9 +137,10 @@ class ProxyContext:
             try:
                 exc = task.exception()
             except asyncio.CancelledError:
-                print(info, "cancelled")
+                if config.verbose > 0:
+                    print(info, "cancelled")
                 return
-            if exc:
+            if exc and config.verbose > 0:
                 print(info, ":", exc)
 
         return task_callback
