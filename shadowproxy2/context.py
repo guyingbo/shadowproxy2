@@ -14,11 +14,6 @@ from .transport.quic import QuicEgress, QuicIngress
 from .transport.tcp import TCPEgress, TCPIngress
 
 
-class NullParser:
-    def set_transport(self, transport):
-        self.transport = transport
-
-
 class ProxyContext:
     stack: contextlib.AsyncExitStack
 
@@ -41,7 +36,6 @@ class ProxyContext:
 
     def create_client_parser(self, target_addr):
         if self.egress_ns is None:
-            # return NullParser()
             return None
         generator = getattr(self, f"{self.egress_ns.proxy}_client")(target_addr)
         return AsyncioParser(generator)
