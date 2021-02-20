@@ -1,11 +1,9 @@
 import asyncio
 
 from aioquic.asyncio import QuicConnectionProtocol
-from aioquic.quic.events import (
-    ConnectionTerminated,
-    StreamDataReceived,
-    HandshakeCompleted,
-)
+from aioquic.quic.events import ConnectionTerminated, StreamDataReceived
+
+from ..config import config
 
 
 class QuicIngress(QuicConnectionProtocol):
@@ -25,13 +23,9 @@ class QuicIngress(QuicConnectionProtocol):
                 stream.task.cancel()
                 del self._streams[event.stream_id]
         elif isinstance(event, ConnectionTerminated):
-            print("server:", event)
             self._streams.clear()
-        elif isinstance(event, HandshakeCompleted):
-            print("server:", event)
-        else:
-            # print("server:", event)
-            pass
+            if event.error_code != 0 and config.verbose > 0:
+                print("quic server connection terminated:", event.reason_phrase)
         # super().quic_event_received(event)
 
 
@@ -92,16 +86,12 @@ class QuicEgress(QuicConnectionProtocol):
             stream.data_received(event.data)
             if event.end_stream:
                 del self._streams[event.stream_id]
-        elif isinstance(event, HandshakeCompleted):
-            pass
         elif isinstance(event, ConnectionTerminated):
-            print("client:", event)
             self._terminated_event.set()
             self._streams.clear()
             self.ctx.quic_egress = None
-        else:
-            pass
-            # print("client:", event)
+            if event.error_code != 0 and config.verbose > 0:
+                print("quic client connection terminated:", event.reason_phrase)
         # super().quic_event_received(event)
 
     def create_stream(self, target_addr):

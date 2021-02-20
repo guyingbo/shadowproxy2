@@ -1,5 +1,7 @@
 import asyncio
 
+from ..config import config
+
 
 class TCPIngress(asyncio.Protocol):
     def __init__(self, ctx):
@@ -14,7 +16,7 @@ class TCPIngress(asyncio.Protocol):
 
     def connection_lost(self, exc):
         self.task.cancel()
-        if exc is not None:
+        if exc is not None and config.verbose > 0:
             print("tcp server connection lost:", exc)
         self.transport.close()
 
@@ -43,7 +45,7 @@ class TCPEgress(asyncio.Protocol):
             self.parser.data_received(b"")
 
     def connection_lost(self, exc):
-        if exc is not None:
+        if exc is not None and config.verbose > 0:
             print("tcp client connection lost:", exc)
         self.transport.close()
 
