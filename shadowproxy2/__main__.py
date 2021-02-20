@@ -1,10 +1,12 @@
 import asyncio
+import resource
+
 import click
 
+from .config import config
+from .context import ProxyContext
 from .server import run_server
 from .urlparser import URLVisitor, grammar
-from .context import ProxyContext
-from .config import config
 
 url_format = "[transport+]proxy://[username:password@][host]:port[#key=value]"
 
@@ -70,6 +72,10 @@ def validate(ctx, url: str):
     help="CA certificate file path",
 )
 def main(ingress, egress, cert_chain, key_file, ca_cert):
+    try:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (50000, 50000))
+    except Exception:
+        pass
     config.cert_chain = cert_chain
     config.key_file = key_file
     config.ca_cert = ca_cert

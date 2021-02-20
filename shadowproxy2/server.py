@@ -10,7 +10,7 @@ async def run_server(ctx_list):
 
     async with contextlib.AsyncExitStack() as stack:
         for ctx in ctx_list:
-            await stack.enter_async_context(ctx)
+            ctx.stack = stack
             print(
                 f"server running at {ctx.ingress_ns.transport}:{ctx.ingress_ns.host}:{ctx.ingress_ns.port} -> {ctx.egress_ns}"
             )

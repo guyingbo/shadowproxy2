@@ -6,30 +6,28 @@ class TCPIngress(asyncio.Protocol):
         self.ctx = ctx
         self.parser = ctx.create_server_parser()
         self.task = asyncio.create_task(ctx.run_proxy(self))
-
-        def myprint(task):
-            exc = task.exception()
-            if exc:
-                print("error:", exc)
-
-        self.task.add_done_callback(myprint)
+        self.task.add_done_callback(ctx.get_task_callback("tcp ingress"))
 
     def connection_made(self, transport):
         self.transport = transport
         self.parser.set_transport(transport)
 
+    def connection_lost(self, exc):
+        self.task.cancel()
+        if exc is not None:
+            print("tcp server connection lost:", exc)
+        self.transport.close()
+
     def data_received(self, data):
         self.parser.data_received(data)
 
-    def eof_received(self):
-        # self.transport.close()
-        self.parser.eof_received()
-
     def write(self, data):
-        self.transport.write(data)
+        if not self.transport.is_closing():
+            self.transport.write(data)
 
-    def close(self):
-        self.transport.close()
+    def write_eof(self):
+        if self.transport.can_write_eof():
+            self.transport.write_eof()
 
 
 class TCPEgress(asyncio.Protocol):
@@ -44,17 +42,19 @@ class TCPEgress(asyncio.Protocol):
             self.parser.set_transport(transport)
             self.parser.data_received(b"")
 
-    def write(self, data):
-        self.transport.write(data)
+    def connection_lost(self, exc):
+        if exc is not None:
+            print("tcp client connection lost:", exc)
+        self.transport.close()
 
     def data_received(self, data):
         if self.parser:
             self.parser.data_received(data)
 
-    def eof_received(self):
-        # self.transport.close()
-        if self.parser:
-            self.parser.eof_received()
+    def write(self, data):
+        if not self.transport.is_closing():
+            self.transport.write(data)
 
-    def close(self):
-        self.transport.close()
+    def write_eof(self):
+        if self.transport.can_write_eof():
+            self.transport.write_eof()

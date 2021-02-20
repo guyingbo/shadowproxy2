@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import ssl
 from functools import partial
 
@@ -7,10 +8,10 @@ from aioquic.quic.configuration import QuicConfiguration
 
 from iofree.parser import AsyncioParser
 
-from .parsers import socks4, socks5
-from .transport.quic import QuicIngress, QuicEgress
-from .transport.tcp import TCPIngress, TCPEgress
 from .config import config
+from .parsers import socks4, socks5
+from .transport.quic import QuicEgress, QuicIngress
+from .transport.tcp import TCPEgress, TCPIngress
 
 
 class NullParser:
@@ -19,10 +20,13 @@ class NullParser:
 
 
 class ProxyContext:
+    stack: contextlib.AsyncExitStack
+
     def __init__(self, ingress_ns, egress_ns):
         self.ingress_ns = ingress_ns
         self.egress_ns = egress_ns
         self.quic_egress = None
+        self.quic_client_lock = asyncio.Lock()
 
     def create_server_parser(self):
         generator = getattr(self, f"{self.ingress_ns.proxy}_server")()
@@ -54,11 +58,12 @@ class ProxyContext:
 
     async def create_tcp_server(self):
         loop = asyncio.get_running_loop()
-        return await loop.create_server(
+        server = await loop.create_server(
             lambda: TCPIngress(self),
             self.ingress_ns.host,
             self.ingress_ns.port,
         )
+        return await self.stack.enter_async_context(server)
 
     async def create_quic_server(self):
         configuration = QuicConfiguration(is_client=False)
@@ -95,40 +100,46 @@ class ProxyContext:
         return egress_stream
 
     async def create_quic_client(self, target_addr):
-        if self.quic_egress is None:
-            configuration = QuicConfiguration()
-            configuration.load_verify_locations(config.ca_cert)
-            configuration.verify_mode = ssl.CERT_NONE
+        async with self.quic_client_lock:
+            if self.quic_egress is None:
+                configuration = QuicConfiguration()
+                configuration.load_verify_locations(config.ca_cert)
+                configuration.verify_mode = ssl.CERT_NONE
 
-            # important: The async context manager must be hold here(reference count > 0), otherwise quic connection will be closed.
-            self.quic_egress_acm = aio.connect(
-                self.egress_ns.host,
-                self.egress_ns.port,
-                create_protocol=partial(QuicEgress, ctx=self),
-                configuration=configuration,
-            )
-            self.quic_egress = await self.quic_egress_acm.__aenter__()
-            await self.quic_egress.wait_connected()
+                # important: The async context manager must be hold here(reference count > 0), otherwise quic connection will be closed.
+                quic_egress_acm = aio.connect(
+                    self.egress_ns.host,
+                    self.egress_ns.port,
+                    create_protocol=partial(QuicEgress, ctx=self),
+                    configuration=configuration,
+                )
+                self.quic_egress = await self.stack.enter_async_context(quic_egress_acm)
+                await self.quic_egress.wait_connected()
         return self.quic_egress.create_stream(target_addr)
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type=None, exc_value=None, tb=None):
-        if hasattr(self, "quic_egress_acm"):
-            await self.quic_egress_acm.__aexit__(exc_type, exc_value, tb)
 
     async def run_proxy(self, ingress_stream):
         request = await ingress_stream.parser.responses.get()
         target_addr = (request.addr.host, request.addr.port)
         egress_stream = await self.create_client(target_addr)
-        ingress_stream.parser.send_event(0)
+        ingress_stream.parser.event_received(0)
         if egress_stream.parser:
             await egress_stream.parser.responses.get()
         egress_stream.data_received = ingress_stream.write
-        egress_stream.eof_received = ingress_stream.close
+        egress_stream.eof_received = ingress_stream.write_eof
         data = ingress_stream.parser.readall()
         if data:
             egress_stream.write(data)
         ingress_stream.data_received = egress_stream.write
-        ingress_stream.eof_received = egress_stream.close
+        ingress_stream.eof_received = egress_stream.write_eof
+
+    def get_task_callback(self, info="error"):
+        def task_callback(task):
+            try:
+                exc = task.exception()
+            except asyncio.CancelledError:
+                print(info, "cancelled")
+                return
+            if exc:
+                print(info, ":", exc)
+
+        return task_callback

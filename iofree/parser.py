@@ -145,7 +145,7 @@ class Parser:
         "indicate whether input has some bytes left"
         return self.buffer.data_size > 0
 
-    def send_event(self, event: typing.Any) -> None:
+    def event_received(self, event: typing.Any) -> None:
         self._input_events.append(event)
         self._process()
 
