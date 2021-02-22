@@ -30,27 +30,23 @@ class URLParamType(click.ParamType):
 URL = URLParamType()
 
 
-def validate(ctx, url: str):
-    if url is None:
-        return None
-    try:
-        tree = grammar.parse(url)
-    except Exception:
-        raise click.BadParameter(
-            f"invalid proxy url format, here is the rules\n\n{grammar}"
-        )
-    visitor = URLVisitor()
-    return visitor.visit(tree)
+def validate_urls(ctx, urls):
+    for url in urls:
+        if url.proxy == "socks4" and (url.username or url.password):
+            print("socks4 does not support authorization, ignore username and password")
+            # raise click.BadParameter("haha")
+    return urls
 
 
 @click.command(help=f"INGRESS OR EGRESS format: {url_format}")
-@click.argument("ingress", nargs=-1, required=True, type=URL)
+@click.argument("ingress", nargs=-1, required=True, type=URL, callback=validate_urls)
 @click.option(
     "-r",
     "egress",
     metavar="EGRESS",
     multiple=True,
     type=URL,
+    callback=validate_urls,
     help="default to direct connect",
 )
 @click.option(

@@ -50,14 +50,23 @@ class ProxyContext:
     async def create_server(self):
         return await getattr(self, f"create_{self.ingress_ns.transport}_server")()
 
-    async def create_tcp_server(self):
+    async def create_tcp_server(self, tls=False):
+        if tls:
+            sslcontext = ssl.create_default_context()
+            sslcontext.load_cert_chain(config.cert_chain, config.key_file)
+        else:
+            sslcontext = None
         loop = asyncio.get_running_loop()
         server = await loop.create_server(
             lambda: TCPIngress(self),
             self.ingress_ns.host,
             self.ingress_ns.port,
+            ssl=sslcontext,
         )
         return await self.stack.enter_async_context(server)
+
+    async def create_tls_server(self):
+        return await self.create_tcp_server(tls=True)
 
     async def create_quic_server(self):
         configuration = QuicConfiguration(is_client=False)
