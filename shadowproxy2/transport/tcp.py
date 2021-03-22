@@ -3,12 +3,12 @@ import asyncio
 from ..config import config
 
 
-class TCPIngress(asyncio.Protocol):
+class TCPInbound(asyncio.Protocol):
     def __init__(self, ctx):
         self.ctx = ctx
         self.parser = ctx.create_server_parser()
         self.task = asyncio.create_task(ctx.run_proxy(self))
-        self.task.add_done_callback(ctx.get_task_callback("tcp ingress"))
+        self.task.add_done_callback(ctx.get_task_callback("tcp inbound"))
 
     def connection_made(self, transport):
         self.transport = transport
@@ -32,7 +32,7 @@ class TCPIngress(asyncio.Protocol):
             self.transport.write_eof()
 
 
-class TCPEgress(asyncio.Protocol):
+class TCPOutbound(asyncio.Protocol):
     def __init__(self, ctx, target_addr):
         self.ctx = ctx
         self.target_addr = target_addr

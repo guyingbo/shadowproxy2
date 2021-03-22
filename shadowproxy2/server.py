@@ -12,7 +12,7 @@ async def run_server(ctx_list):
         for ctx in ctx_list:
             ctx.stack = stack
             print(
-                f"server running at {ctx.ingress_ns.transport}:{ctx.ingress_ns.host}:{ctx.ingress_ns.port} -> {ctx.egress_ns}"
+                f"server running at {ctx.inbound_ns.transport}:{ctx.inbound_ns.host}:{ctx.inbound_ns.port} -> {ctx.outbound_ns}"
             )
             await ctx.create_server()
 

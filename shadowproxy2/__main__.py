@@ -38,12 +38,12 @@ def validate_urls(ctx, urls):
     return urls
 
 
-@click.command(help=f"INGRESS OR EGRESS format: {url_format}")
-@click.argument("ingress", nargs=-1, required=True, type=URL, callback=validate_urls)
+@click.command(help=f"INBOUND OR OUTBOUND format: {url_format}")
+@click.argument("inbound", nargs=-1, required=True, type=URL, callback=validate_urls)
 @click.option(
     "-r",
-    "egress",
-    metavar="EGRESS",
+    "outbound",
+    metavar="OUTBOUND",
     multiple=True,
     type=URL,
     callback=validate_urls,
@@ -68,7 +68,7 @@ def validate_urls(ctx, urls):
     help="CA certificate file path",
 )
 @click.option("-v", "--verbose", count=True)
-def main(ingress, egress, cert_chain, key_file, ca_cert, verbose):
+def main(inbound, outbound, cert_chain, key_file, ca_cert, verbose):
     try:
         resource.setrlimit(resource.RLIMIT_NOFILE, (50000, 50000))
     except Exception:
@@ -77,13 +77,13 @@ def main(ingress, egress, cert_chain, key_file, ca_cert, verbose):
     config.key_file = key_file
     config.ca_cert = ca_cert
     config.verbose = verbose
-    egress_dict = {getattr(ns, "name", str(i + 1)): ns for i, ns in enumerate(egress)}
+    outbound_dict = {getattr(ns, "name", str(i + 1)): ns for i, ns in enumerate(outbound)}
     ctx_list = [
         ProxyContext(
-            ingress_ns,
-            egress_dict.get(ingress_ns.via) if hasattr(ingress_ns, "via") else None,
+            inbound_ns,
+            outbound_dict.get(inbound_ns.via) if hasattr(inbound_ns, "via") else None,
         )
-        for ingress_ns in ingress
+        for inbound_ns in inbound
     ]
     asyncio.run(run_server(ctx_list))
 
