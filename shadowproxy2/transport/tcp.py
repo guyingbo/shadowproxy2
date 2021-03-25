@@ -8,7 +8,10 @@ class TCPInbound(asyncio.Protocol):
         self.ctx = ctx
         self.parser = ctx.create_server_parser()
         self.task = asyncio.create_task(ctx.run_proxy(self))
-        self.task.add_done_callback(ctx.get_task_callback("tcp inbound"))
+        self.task.add_done_callback(ctx.get_task_callback(repr(self)))
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__}()>"
 
     def connection_made(self, transport):
         self.transport = transport
@@ -17,7 +20,7 @@ class TCPInbound(asyncio.Protocol):
     def connection_lost(self, exc):
         self.task.cancel()
         if exc is not None and config.verbose > 0:
-            print("tcp server connection lost:", exc)
+            print(f"{self} connection lost:", exc)
         self.transport.close()
 
     def data_received(self, data):
@@ -37,6 +40,9 @@ class TCPOutbound(asyncio.Protocol):
         self.ctx = ctx
         self.target_addr = target_addr
 
+    def __repr__(self):
+        return f"<{self.__class__.__name__}()>"
+
     def connection_made(self, transport):
         self.transport = transport
         self.parser = self.ctx.create_client_parser(self.target_addr)
@@ -46,7 +52,7 @@ class TCPOutbound(asyncio.Protocol):
 
     def connection_lost(self, exc):
         if exc is not None and config.verbose > 0:
-            print("tcp client connection lost:", exc)
+            print(f"{self} connection lost:", exc)
         self.transport.close()
 
     def data_received(self, data):

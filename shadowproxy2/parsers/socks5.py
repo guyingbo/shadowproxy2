@@ -30,7 +30,7 @@ def server(username: str = None, password: str = None):
         raise ProtocolError(
             f"only support connect command now, got {socks5.Cmd.connect!r}"
         )
-    parser.respond(request)
+    parser.respond(request.addr)
     rep = yield from iofree.wait_event()
     parser.write(socks5.Reply(..., socks5.Rep(rep), ..., addr).binary)
 

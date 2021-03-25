@@ -30,11 +30,13 @@ class URLParamType(click.ParamType):
 URL = URLParamType()
 
 
-def validate_urls(ctx, urls):
+def validate_urls(ctx, param, urls):
     for url in urls:
         if url.proxy == "socks4" and (url.username or url.password):
             print("socks4 does not support authorization, ignore username and password")
             # raise click.BadParameter("haha")
+        if url.proxy == "ss" and url.username not in ("chacha20-ietf-poly1305",):
+            raise click.BadParameter("supported ss ciphers: chacha20-ietf-poly1305")
     return urls
 
 
@@ -77,7 +79,9 @@ def main(inbound, outbound, cert_chain, key_file, ca_cert, verbose):
     config.key_file = key_file
     config.ca_cert = ca_cert
     config.verbose = verbose
-    outbound_dict = {getattr(ns, "name", str(i + 1)): ns for i, ns in enumerate(outbound)}
+    outbound_dict = {
+        getattr(ns, "name", str(i + 1)): ns for i, ns in enumerate(outbound)
+    }
     ctx_list = [
         ProxyContext(
             inbound_ns,

@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import ssl
-from functools import partial
+from functools import partial, cached_property
 
 from aioquic import asyncio as aio
 from aioquic.quic.configuration import QuicConfiguration
@@ -9,9 +9,11 @@ from aioquic.quic.configuration import QuicConfiguration
 from iofree.parser import AsyncioParser
 
 from .config import config
-from .parsers import socks4, socks5
+from .parsers import socks4, socks5, aead
 from .transport.quic import QuicOutbound, QuicInbound
 from .transport.tcp import TCPOutbound, TCPInbound
+from .transport.aead import AEADInbound, AEADOutbound
+from .ciphers import ChaCha20IETFPoly1305
 
 
 class ProxyContext:
@@ -23,29 +25,47 @@ class ProxyContext:
         self.quic_outbound = None
         self.quic_client_lock = asyncio.Lock()
 
+    @cached_property
+    def inbound_cipher(self):
+        return ChaCha20IETFPoly1305(self.inbound_ns.password)
+
+    @cached_property
+    def outbound_cipher(self):
+        return ChaCha20IETFPoly1305(self.outbound_ns.password)
+
+    def create_inbound_parser(self):
+        return aead.reader.parser(self.inbound_cipher)
+
+    def create_outbound_parser(self):
+        return aead.reader.parser(self.outbound_cipher)
+
     def create_server_parser(self):
-        generator = getattr(self, f"{self.inbound_ns.proxy}_server")()
+        proxy = self.inbound_ns.proxy
+        if proxy == "socks5":
+            ns = self.inbound_ns
+            generator = socks5.server(ns.username, ns.password)
+        elif proxy == "socks4":
+            generator = socks4.server()
+        elif proxy == "ss":
+            generator = aead.ss_server()
+        else:
+            raise Exception(f"Unknown proxy type: {proxy}")
         return AsyncioParser(generator)
-
-    def socks5_server(self):
-        ns = self.inbound_ns
-        return socks5.server(ns.username, ns.password)
-
-    def socks4_server(self):
-        return socks4.server()
 
     def create_client_parser(self, target_addr):
         if self.outbound_ns is None:
             return None
-        generator = getattr(self, f"{self.outbound_ns.proxy}_client")(target_addr)
+        proxy = self.outbound_ns.proxy
+        if proxy == "socks5":
+            ns = self.outbound_ns
+            generator = socks5.client(ns.username, ns.password, *target_addr)
+        elif proxy == "socks4":
+            generator = socks4.client(*target_addr)
+        elif proxy == "ss":
+            generator = aead.ss_client(target_addr)
+        else:
+            raise Exception(f"Unknown proxy type: {proxy}")
         return AsyncioParser(generator)
-
-    def socks5_client(self, target_addr):
-        ns = self.outbound_ns
-        return socks5.client(ns.username, ns.password, *target_addr)
-
-    def socks4_client(self, target_addr):
-        return socks4.client(*target_addr)
 
     async def create_server(self):
         return await getattr(self, f"create_{self.inbound_ns.transport}_server")()
@@ -57,8 +77,11 @@ class ProxyContext:
         else:
             sslcontext = None
         loop = asyncio.get_running_loop()
+        Inbound = TCPInbound
+        if self.inbound_ns.proxy == "ss":
+            Inbound = AEADInbound
         server = await loop.create_server(
-            lambda: TCPInbound(self),
+            lambda: Inbound(self),
             self.inbound_ns.host,
             self.inbound_ns.port,
             ssl=sslcontext,
@@ -97,8 +120,11 @@ class ProxyContext:
             port = self.outbound_ns.port
         else:
             host, port = target_addr
+        Outbound = TCPOutbound
+        if self.outbound_ns and self.outbound_ns.proxy == "ss":
+            Outbound = AEADOutbound
         _, outbound_stream = await loop.create_connection(
-            lambda: TCPOutbound(self, target_addr), host, port
+            lambda: Outbound(self, target_addr), host, port
         )
         return outbound_stream
 
@@ -116,24 +142,38 @@ class ProxyContext:
                     create_protocol=partial(QuicOutbound, ctx=self),
                     configuration=configuration,
                 )
-                self.quic_outbound = await self.stack.enter_async_context(quic_outbound_acm)
+                self.quic_outbound = await self.stack.enter_async_context(
+                    quic_outbound_acm
+                )
                 await self.quic_outbound.wait_connected()
         return self.quic_outbound.create_stream(target_addr)
 
     async def run_proxy(self, inbound_stream):
-        request = await inbound_stream.parser.responses.get()
-        target_addr = (request.addr.host, request.addr.port)
+        addr = await inbound_stream.parser.responses.get()
+        target_addr = (addr.host, addr.port)
         outbound_stream = await self.create_client(target_addr)
         inbound_stream.parser.event_received(0)
         if outbound_stream.parser:
             await outbound_stream.parser.responses.get()
-        outbound_stream.data_received = inbound_stream.write
-        outbound_stream.eof_received = inbound_stream.write_eof
+        if hasattr(outbound_stream, "data_callback"):
+            outbound_stream.data_callback = inbound_stream.write
+        else:
+            outbound_stream.data_received = inbound_stream.write
+        if hasattr(outbound_stream, "eof_callback"):
+            outbound_stream.eof_callback = inbound_stream.write_eof
+        else:
+            outbound_stream.eof_received = inbound_stream.write_eof
         data = inbound_stream.parser.readall()
         if data:
             outbound_stream.write(data)
-        inbound_stream.data_received = outbound_stream.write
-        inbound_stream.eof_received = outbound_stream.write_eof
+        if hasattr(inbound_stream, "data_callback"):
+            inbound_stream.data_callback = outbound_stream.write
+        else:
+            inbound_stream.data_received = outbound_stream.write
+        if hasattr(inbound_stream, "eof_callback"):
+            inbound_stream.eof_callback = outbound_stream.write_eof
+        else:
+            inbound_stream.eof_received = outbound_stream.write_eof
 
     def get_task_callback(self, info="error"):
         def task_callback(task):
