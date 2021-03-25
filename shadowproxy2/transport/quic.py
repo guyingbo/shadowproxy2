@@ -3,7 +3,7 @@ import asyncio
 from aioquic.asyncio import QuicConnectionProtocol
 from aioquic.quic.events import ConnectionTerminated, StreamDataReceived
 
-from ..config import config
+from .. import app
 
 
 class QuicInbound(QuicConnectionProtocol):
@@ -24,7 +24,7 @@ class QuicInbound(QuicConnectionProtocol):
                 del self._streams[event.stream_id]
         elif isinstance(event, ConnectionTerminated):
             self._streams.clear()
-            if event.error_code != 0 and config.verbose > 0:
+            if event.error_code != 0 and app.settings.verbose > 0:
                 print("quic server connection terminated:", event.reason_phrase)
         # super().quic_event_received(event)
 
@@ -90,7 +90,7 @@ class QuicOutbound(QuicConnectionProtocol):
             self._terminated_event.set()
             self._streams.clear()
             self.ctx.quic_outbound = None
-            if event.error_code != 0 and config.verbose > 0:
+            if event.error_code != 0 and app.settings.verbose > 0:
                 print("quic client connection terminated:", event.reason_phrase)
         # super().quic_event_received(event)
 

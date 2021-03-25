@@ -1,19 +1,19 @@
 import asyncio
 import contextlib
 import ssl
-from functools import partial, cached_property
+from functools import cached_property, partial
 
 from aioquic import asyncio as aio
 from aioquic.quic.configuration import QuicConfiguration
 
 from iofree.parser import AsyncioParser
 
-from .config import config
-from .parsers import socks4, socks5, aead
-from .transport.quic import QuicOutbound, QuicInbound
-from .transport.tcp import TCPOutbound, TCPInbound
-from .transport.aead import AEADInbound, AEADOutbound
+from . import app
 from .ciphers import ChaCha20IETFPoly1305
+from .parsers import aead, socks4, socks5
+from .transport.aead import AEADInbound, AEADOutbound
+from .transport.quic import QuicInbound, QuicOutbound
+from .transport.tcp import TCPInbound, TCPOutbound
 
 
 class ProxyContext:
@@ -73,7 +73,9 @@ class ProxyContext:
     async def create_tcp_server(self, tls=False):
         if tls:
             sslcontext = ssl.create_default_context()
-            sslcontext.load_cert_chain(config.cert_chain, config.key_file)
+            sslcontext.load_cert_chain(
+                str(app.settings.cert_chain), str(app.settings.key_file)
+            )
         else:
             sslcontext = None
         loop = asyncio.get_running_loop()
@@ -94,8 +96,8 @@ class ProxyContext:
     async def create_quic_server(self):
         configuration = QuicConfiguration(is_client=False)
         configuration.load_cert_chain(
-            config.cert_chain,
-            keyfile=config.key_file,
+            str(app.settings.cert_chain),
+            keyfile=str(app.settings.key_file),
         )
         return await aio.serve(
             self.inbound_ns.host,
@@ -132,7 +134,7 @@ class ProxyContext:
         async with self.quic_client_lock:
             if self.quic_outbound is None:
                 configuration = QuicConfiguration()
-                configuration.load_verify_locations(config.ca_cert)
+                configuration.load_verify_locations(str(app.settings.ca_cert))
                 configuration.verify_mode = ssl.CERT_NONE
 
                 # important: The async context manager must be hold here(reference count > 0), otherwise quic connection will be closed.
@@ -180,10 +182,10 @@ class ProxyContext:
             try:
                 exc = task.exception()
             except asyncio.CancelledError:
-                if config.verbose > 0:
+                if app.settings.verbose > 0:
                     print(info, "cancelled")
                 return
-            if exc and config.verbose > 0:
+            if exc and app.settings.verbose > 0:
                 print(info, ":", exc)
 
         return task_callback

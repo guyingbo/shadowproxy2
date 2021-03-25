@@ -3,7 +3,7 @@ import resource
 
 import click
 
-from .config import config
+from . import app
 from .context import ProxyContext
 from .server import run_server
 from .urlparser import URLVisitor, grammar
@@ -75,10 +75,9 @@ def main(inbound, outbound, cert_chain, key_file, ca_cert, verbose):
         resource.setrlimit(resource.RLIMIT_NOFILE, (50000, 50000))
     except Exception:
         pass
-    config.cert_chain = cert_chain
-    config.key_file = key_file
-    config.ca_cert = ca_cert
-    config.verbose = verbose
+    app.settings = app.Settings(
+        cert_chain=cert_chain, key_file=key_file, ca_cert=ca_cert, verbose=verbose
+    )
     outbound_dict = {
         getattr(ns, "name", str(i + 1)): ns for i, ns in enumerate(outbound)
     }

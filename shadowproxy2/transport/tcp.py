@@ -1,6 +1,6 @@
 import asyncio
 
-from ..config import config
+from .. import app
 
 
 class TCPInbound(asyncio.Protocol):
@@ -19,7 +19,7 @@ class TCPInbound(asyncio.Protocol):
 
     def connection_lost(self, exc):
         self.task.cancel()
-        if exc is not None and config.verbose > 0:
+        if exc is not None and app.settings.verbose > 0:
             print(f"{self} connection lost:", exc)
         self.transport.close()
 
@@ -51,7 +51,7 @@ class TCPOutbound(asyncio.Protocol):
             self.parser.data_received(b"")
 
     def connection_lost(self, exc):
-        if exc is not None and config.verbose > 0:
+        if exc is not None and app.settings.verbose > 0:
             print(f"{self} connection lost:", exc)
         self.transport.close()
 
