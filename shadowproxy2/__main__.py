@@ -84,7 +84,7 @@ def main(inbound, outbound, cert_chain, key_file, ca_cert, verbose):
     ctx_list = [
         ProxyContext(
             inbound_ns,
-            outbound_dict.get(inbound_ns.via) if hasattr(inbound_ns, "via") else None,
+            outbound_dict.get(inbound_ns.via) if inbound_ns.via else None,
         )
         for inbound_ns in inbound
     ]

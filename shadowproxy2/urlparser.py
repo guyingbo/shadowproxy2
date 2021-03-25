@@ -1,7 +1,9 @@
-import types
 import sys
+
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
+
+from .models import BoundNamespace
 
 grammar = r"""
 url         = (transport "+")? proxy "://" (username ":" password "@")? host? ":" port ("#" pair)?
@@ -53,7 +55,7 @@ class URLVisitor(NodeVisitor):
         self.info[node.children[0].text] = node.children[2].text
 
     def visit_url(self, node, visited_children):
-        return types.SimpleNamespace(**self.info)
+        return BoundNamespace.parse_obj(self.info)
 
     def generic_visit(self, node, visited_children):
         return node
