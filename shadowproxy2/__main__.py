@@ -19,9 +19,9 @@ class URLParamType(click.ParamType):
             tree = grammar.parse(value)
             visitor = URLVisitor()
             return visitor.visit(tree)
-        except Exception:
+        except Exception as e:
             self.fail(
-                f"bad url format, here are the rules\n\n{grammar}",
+                f"bad url format: {e}\nrules:\n{grammar}",
                 param,
                 ctx,
             )
@@ -78,9 +78,7 @@ def main(inbound, outbound, cert_chain, key_file, ca_cert, verbose):
     app.settings = app.Settings(
         cert_chain=cert_chain, key_file=key_file, ca_cert=ca_cert, verbose=verbose
     )
-    outbound_dict = {
-        getattr(ns, "name", str(i + 1)): ns for i, ns in enumerate(outbound)
-    }
+    outbound_dict = {ns.name or str(i + 1): ns for i, ns in enumerate(outbound)}
     ctx_list = [
         ProxyContext(
             inbound_ns,

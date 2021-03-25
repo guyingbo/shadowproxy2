@@ -35,3 +35,7 @@ class BoundNamespace(BaseModel):
     class Config:
         use_enum_values = True
         extra = "forbid"
+
+    def __str__(self):
+        auth = f"{self.username}:{self.password}@" if self.username else ""
+        return f"{self.transport}+{self.proxy}://{auth}{self.host}:{self.port}"
