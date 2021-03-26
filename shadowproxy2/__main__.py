@@ -41,10 +41,17 @@ def validate_urls(ctx, param, urls):
 
 
 @click.command(help=f"INBOUND OR OUTBOUND format: {url_format}")
-@click.argument("inbound", nargs=-1, required=True, type=URL, callback=validate_urls)
+@click.argument(
+    "inbound_list",
+    metavar="INBOUND",
+    nargs=-1,
+    required=True,
+    type=URL,
+    callback=validate_urls,
+)
 @click.option(
     "-r",
-    "outbound",
+    "outbound_list",
     metavar="OUTBOUND",
     multiple=True,
     type=URL,
@@ -70,7 +77,7 @@ def validate_urls(ctx, param, urls):
     help="CA certificate file path",
 )
 @click.option("-v", "--verbose", count=True)
-def main(inbound, outbound, cert_chain, key_file, ca_cert, verbose):
+def main(inbound_list, outbound_list, cert_chain, key_file, ca_cert, verbose):
     try:
         resource.setrlimit(resource.RLIMIT_NOFILE, (50000, 50000))
     except Exception:
@@ -78,13 +85,13 @@ def main(inbound, outbound, cert_chain, key_file, ca_cert, verbose):
     app.settings = app.Settings(
         cert_chain=cert_chain, key_file=key_file, ca_cert=ca_cert, verbose=verbose
     )
-    outbound_dict = {ns.name or str(i + 1): ns for i, ns in enumerate(outbound)}
+    outbound_dict = {ns.name or str(i + 1): ns for i, ns in enumerate(outbound_list)}
     ctx_list = [
         ProxyContext(
             inbound_ns,
             outbound_dict.get(inbound_ns.via) if inbound_ns.via else None,
         )
-        for inbound_ns in inbound
+        for inbound_ns in inbound_list
     ]
     asyncio.run(run_server(ctx_list))
 

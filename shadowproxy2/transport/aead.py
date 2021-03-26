@@ -1,9 +1,10 @@
 import asyncio
 
 from .. import app
+from .base import InboundBase, OutboundBase
 
 
-class AEADInbound(asyncio.Protocol):
+class AEADInbound(asyncio.Protocol, InboundBase):
     def __init__(self, ctx):
         self.ctx = ctx
         self.aead_parser = ctx.create_inbound_parser()
@@ -43,7 +44,7 @@ class AEADInbound(asyncio.Protocol):
             self.transport.write_eof()
 
 
-class AEADOutbound(asyncio.Protocol):
+class AEADOutbound(asyncio.Protocol, OutboundBase):
     def __init__(self, ctx, target_addr):
         self.ctx = ctx
         self.target_addr = target_addr

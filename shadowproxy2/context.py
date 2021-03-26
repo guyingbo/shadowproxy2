@@ -125,9 +125,18 @@ class ProxyContext:
         Outbound = TCPOutbound
         if self.outbound_ns and self.outbound_ns.proxy == "ss":
             Outbound = AEADOutbound
-        _, outbound_stream = await loop.create_connection(
-            lambda: Outbound(self, target_addr), host, port
-        )
+        for i in range(1, -1, -1):
+            try:
+                _, outbound_stream = await loop.create_connection(
+                    lambda: Outbound(self, target_addr), host, port
+                )
+            except OSError as e:
+                if app.settings.verbose > 0:
+                    print(e, "retrying...")
+                if i == 0:
+                    raise
+            else:
+                break
         return outbound_stream
 
     async def create_quic_client(self, target_addr):
@@ -155,6 +164,8 @@ class ProxyContext:
         target_addr = (addr.host, addr.port)
         outbound_stream = await self.create_client(target_addr)
         inbound_stream.parser.event_received(0)
+        if app.settings.verbose > 0:
+            print(inbound_stream, "->", outbound_stream)
         if outbound_stream.parser:
             await outbound_stream.parser.responses.get()
         if hasattr(outbound_stream, "data_callback"):

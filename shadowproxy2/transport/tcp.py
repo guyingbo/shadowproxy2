@@ -1,17 +1,15 @@
 import asyncio
 
 from .. import app
+from .base import InboundBase, OutboundBase
 
 
-class TCPInbound(asyncio.Protocol):
+class TCPInbound(asyncio.Protocol, InboundBase):
     def __init__(self, ctx):
         self.ctx = ctx
         self.parser = ctx.create_server_parser()
         self.task = asyncio.create_task(ctx.run_proxy(self))
         self.task.add_done_callback(ctx.get_task_callback(repr(self)))
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__}()>"
 
     def connection_made(self, transport):
         self.transport = transport
@@ -35,13 +33,10 @@ class TCPInbound(asyncio.Protocol):
             self.transport.write_eof()
 
 
-class TCPOutbound(asyncio.Protocol):
+class TCPOutbound(asyncio.Protocol, OutboundBase):
     def __init__(self, ctx, target_addr):
         self.ctx = ctx
         self.target_addr = target_addr
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__}()>"
 
     def connection_made(self, transport):
         self.transport = transport
