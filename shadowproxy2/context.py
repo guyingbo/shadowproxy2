@@ -177,7 +177,9 @@ class ProxyContext:
                     quic_outbound_acm
                 )
                 await self.quic_outbound.wait_connected()
-        return self.quic_outbound.create_stream(target_addr)
+        outbound_stream = self.quic_outbound.create_stream(target_addr)
+        self.create_outbound_proxy(outbound_stream, source_addr)
+        return outbound_stream
 
     async def run_proxy(self, inbound_stream):
         addr = await inbound_stream.parser.responses.get()

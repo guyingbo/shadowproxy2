@@ -32,6 +32,10 @@ class QuicInbound(QuicConnectionProtocol):
 class QuicStream:
     quic: QuicConnectionProtocol
 
+    @property
+    def transport(self):
+        return self.quic._transport
+
     def write(self, data):
         self.quic._quic.send_stream_data(self.stream_id, data, False)
         self.quic._transmit_soon()

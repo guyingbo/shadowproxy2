@@ -15,14 +15,14 @@ class Controllable(Protocol):
 
 
 class Throttle:
-    def __init__(self, rate: int, time_unit: int = 2):
+    def __init__(self, rate: int, time_window: float = 0.5):
         """
         Token Bucket Algorithm
         @param rate: number of tokens added to the bucket per second
-        @param time_unit: the tokens are added in this time frame
+        @param time_window: the tokens are added in this time frame
         """
         self.rate = rate
-        self.tokens = rate * time_unit
+        self.tokens = rate * time_window
         self.bucket = self.tokens
         self.last_check = time.monotonic()
 
@@ -40,7 +40,7 @@ class Throttle:
         if self.bucket < 1:
             loop = asyncio.get_running_loop()
             controllable.pause()
-            loop.call_later(1 - self.bucket / self.rate, controllable.resume)
+            loop.call_later((1 - self.bucket) / self.rate, controllable.resume)
 
 
 class ProtocolProxy:
@@ -48,6 +48,7 @@ class ProtocolProxy:
 
     def __init__(self, protocol, throttle):
         self.protocol = protocol
+        protocol.proxy_ref = self
         self.throttle = throttle
 
     def __getattr__(self, name):
@@ -64,9 +65,9 @@ class ProtocolProxy:
         self.protocol.data_received(data)
 
     def pause(self):
-        if hasattr(self, "transport"):
-            self.transport.pause_reading()
+        if hasattr(self.protocol, "transport"):
+            self.protocol.transport.pause_reading()
 
     def resume(self):
-        if hasattr(self, "transport"):
-            self.transport.resume_reading()
+        if hasattr(self.protocol, "transport"):
+            self.protocol.transport.resume_reading()
