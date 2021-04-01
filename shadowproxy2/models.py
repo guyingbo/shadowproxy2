@@ -22,6 +22,16 @@ class ProxyEnum(Enum):
     red = "red"
 
 
+rate_mapping = {
+    20: "144p",
+    30: "240p",
+    50: "360p",
+    60: "480p",
+    80: "720p",
+    100: "1080p",
+}
+
+
 class BoundNamespace(BaseModel):
     transport: TransportEnum
     proxy: ProxyEnum
@@ -31,6 +41,8 @@ class BoundNamespace(BaseModel):
     port: int
     via: str = None
     name: str = None
+    ul: int = None  # max upload traffic speed per connection(KB/s)
+    dl: int = None  # max download traffic speed per connection(KB/s)
 
     class Config:
         use_enum_values = True

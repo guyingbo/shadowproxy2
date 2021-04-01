@@ -26,6 +26,7 @@ class AEADInbound(asyncio.Protocol, InboundBase):
 
     def connection_made(self, transport):
         self.transport = transport
+        self.source_addr = transport.get_extra_info("peername")
 
     def connection_lost(self, exc):
         if exc is not None and app.settings.verbose > 0:

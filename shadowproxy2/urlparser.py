@@ -6,7 +6,7 @@ from parsimonious.nodes import NodeVisitor
 from .models import BoundNamespace
 
 grammar = r"""
-url         = (transport "+")? proxy "://" (username ":" password "@")? host? ":" port ("#" pair)?
+url         = (transport "+")? proxy "://" (username ":" password "@")? host? ":" port ("#" pair ("," pair)* )?
 transport   = "tcp" / "kcp" / "quic" / "udp" / "tls"
 proxy       = "ss" / "socks5" / "socks4" / "http" / "tunnel" / "red"
 host        = ipv4 / fqdn
@@ -16,7 +16,7 @@ username    = ~r"[\w-]+"
 password    = ~r"[\w-]+"
 port        = ~r"\d+"
 pair        = key "=" value
-key         = "via" / "name"
+key         = "via" / "name" / "ul" / "dl"
 value       = ~r"[\w-]+"
 """
 

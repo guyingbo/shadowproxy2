@@ -14,6 +14,7 @@ from .parsers import aead, socks4, socks5
 from .transport.aead import AEADInbound, AEADOutbound
 from .transport.quic import QuicInbound, QuicOutbound
 from .transport.tcp import TCPInbound, TCPOutbound
+from .throttle import ProtocolProxy, Throttle
 
 
 class ProxyContext:
@@ -24,6 +25,7 @@ class ProxyContext:
         self.outbound_ns = outbound_ns
         self.quic_outbound = None
         self.quic_client_lock = asyncio.Lock()
+        self.throttles = {}
 
     @cached_property
     def inbound_cipher(self):
@@ -67,6 +69,20 @@ class ProxyContext:
             raise Exception(f"Unknown proxy type: {proxy}")
         return AsyncioParser(generator)
 
+    def create_inbound_proxy(self, inbound):
+        if self.inbound_ns.ul:
+            throttle = Throttle(self.inbound_ns.ul * 1024)
+            return ProtocolProxy(inbound, throttle)
+        return inbound
+
+    def create_outbound_proxy(self, outbound, source_addr):
+        if self.inbound_ns.dl:
+            throttle = self.throttles.setdefault(
+                source_addr[0], Throttle(self.inbound_ns.dl * 1024)
+            )
+            return ProtocolProxy(outbound, throttle)
+        return outbound
+
     async def create_server(self):
         return await getattr(self, f"create_{self.inbound_ns.transport}_server")()
 
@@ -83,7 +99,7 @@ class ProxyContext:
         if self.inbound_ns.proxy == "ss":
             Inbound = AEADInbound
         server = await loop.create_server(
-            lambda: Inbound(self),
+            lambda: self.create_inbound_proxy(Inbound(self)),
             self.inbound_ns.host,
             self.inbound_ns.port,
             ssl=sslcontext,
@@ -109,13 +125,13 @@ class ProxyContext:
             ),
         )
 
-    async def create_client(self, target_addr):
+    async def create_client(self, target_addr, source_addr):
         if self.outbound_ns is None:
-            return await self.create_tcp_client(target_addr)
+            return await self.create_tcp_client(target_addr, source_addr)
         func = getattr(self, f"create_{self.outbound_ns.transport}_client")
-        return await func(target_addr)
+        return await func(target_addr, source_addr)
 
-    async def create_tcp_client(self, target_addr):
+    async def create_tcp_client(self, target_addr, source_addr):
         loop = asyncio.get_running_loop()
         if self.outbound_ns:
             host = self.outbound_ns.host
@@ -127,19 +143,23 @@ class ProxyContext:
             Outbound = AEADOutbound
         for i in range(1, -1, -1):
             try:
-                _, outbound_stream = await loop.create_connection(
-                    lambda: Outbound(self, target_addr), host, port
+                _, outbound_proxy = await loop.create_connection(
+                    lambda: self.create_outbound_proxy(
+                        Outbound(self, target_addr), source_addr
+                    ),
+                    host,
+                    port,
                 )
             except OSError as e:
-                if app.settings.verbose > 0:
+                if app.settings.verbose > 1:
                     print(e, "retrying...")
                 if i == 0:
                     raise
             else:
                 break
-        return outbound_stream
+        return getattr(outbound_proxy, "protocol", outbound_proxy)
 
-    async def create_quic_client(self, target_addr):
+    async def create_quic_client(self, target_addr, source_addr):
         async with self.quic_client_lock:
             if self.quic_outbound is None:
                 configuration = QuicConfiguration()
@@ -162,7 +182,9 @@ class ProxyContext:
     async def run_proxy(self, inbound_stream):
         addr = await inbound_stream.parser.responses.get()
         target_addr = (addr.host, addr.port)
-        outbound_stream = await self.create_client(target_addr)
+        outbound_stream = await self.create_client(
+            target_addr, inbound_stream.source_addr
+        )
         inbound_stream.parser.event_received(0)
         if app.settings.verbose > 0:
             print(inbound_stream, "->", outbound_stream)

@@ -59,6 +59,7 @@ class QuicInboundStream(QuicStream):
         self.parser.set_transport(self)
         self.task = asyncio.create_task(self.ctx.run_proxy(self))
         self.task.add_done_callback(self.ctx.get_task_callback("quic inbound"))
+        self.source_addr = ("", 0)
 
 
 class QuicOutbound(QuicConnectionProtocol):

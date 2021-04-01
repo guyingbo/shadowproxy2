@@ -77,13 +77,23 @@ def validate_urls(ctx, param, urls):
     help="CA certificate file path",
 )
 @click.option("-v", "--verbose", count=True)
-def main(inbound_list, outbound_list, cert_chain, key_file, ca_cert, verbose):
+def main(
+    inbound_list,
+    outbound_list,
+    cert_chain,
+    key_file,
+    ca_cert,
+    verbose,
+):
     try:
         resource.setrlimit(resource.RLIMIT_NOFILE, (50000, 50000))
     except Exception:
         pass
     app.settings = app.Settings(
-        cert_chain=cert_chain, key_file=key_file, ca_cert=ca_cert, verbose=verbose
+        cert_chain=cert_chain,
+        key_file=key_file,
+        ca_cert=ca_cert,
+        verbose=verbose,
     )
     outbound_dict = {ns.name or str(i + 1): ns for i, ns in enumerate(outbound_list)}
     ctx_list = [
