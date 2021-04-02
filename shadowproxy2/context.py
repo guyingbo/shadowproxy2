@@ -6,7 +6,7 @@ from functools import cached_property, partial
 from aioquic import asyncio as aio
 from aioquic.quic.configuration import QuicConfiguration
 
-from iofree.parser import AsyncioParser
+from .iofree.parser import AsyncioParser
 
 from . import app
 from .ciphers import ChaCha20IETFPoly1305

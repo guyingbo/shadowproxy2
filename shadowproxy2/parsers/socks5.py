@@ -1,6 +1,6 @@
-import iofree
-from iofree.contrib import socks5
-from iofree.exceptions import ProtocolError
+from .. import iofree
+from ..iofree.contrib import socks5
+from ..iofree.exceptions import ProtocolError
 
 
 def server(username: str = None, password: str = None):

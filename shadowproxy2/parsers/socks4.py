@@ -1,8 +1,8 @@
 import enum
 import socket
 
-import iofree
-from iofree import schema
+from .. import iofree
+from ..iofree import schema
 
 
 class Cmd(enum.IntEnum):

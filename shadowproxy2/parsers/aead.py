@@ -1,5 +1,5 @@
-import iofree
-from iofree.contrib.common import Addr
+from .. import iofree
+from ..iofree.contrib.common import Addr
 
 
 @iofree.parser

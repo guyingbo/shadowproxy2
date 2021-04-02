@@ -1,10 +1,10 @@
-import re
 import base64
-import iofree
-
+import re
 from urllib.parse import urlparse
-from iofree import schema
-from iofree.exceptions import ProtocolError
+
+from .. import iofree
+from ..iofree import schema
+from ..iofree.exceptions import ProtocolError
 
 HTTP_LINE = re.compile(b"([^ ]+) +(.+?) +(HTTP/[^ ]+)")
 ABSOLUTE_PREFIX = re.compile(r"^(.*://)?[^/]*")
