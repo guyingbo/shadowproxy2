@@ -22,9 +22,14 @@ class Throttle:
         @param time_window: the tokens are added in this time frame
         """
         self.rate = rate
+        self.time_window = time_window
         self.tokens = rate * time_window
         self.bucket = self.tokens
         self.last_check = time.monotonic()
+
+    def update_rate(self, rate):
+        self.rate = rate
+        self.tokens = rate * self.time_window
 
     def consume(self, packets: int, controllable: Controllable):
         current = time.monotonic()
@@ -51,6 +56,9 @@ class ProtocolProxy:
         protocol.proxy_ref = self
         self.throttle = throttle
 
+        # self.received = 0
+        # self.last_check = time.monotonic()
+
     def __getattr__(self, name):
         return getattr(self.protocol, name)
 
@@ -64,7 +72,15 @@ class ProtocolProxy:
         self.throttle.consume(len(data), self)
         self.protocol.data_received(data)
 
+        # self.received += len(data)
+
     def pause(self):
+        # current = time.monotonic()
+        # time_passed = current - self.last_check
+        # self.last_check = current
+        # print(f"{time_passed:.1f}", int(self.received // time_passed // 1024))
+        # self.received = 0
+
         if hasattr(self.protocol, "transport"):
             self.protocol.transport.pause_reading()
 

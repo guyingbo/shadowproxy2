@@ -41,8 +41,8 @@ class BoundNamespace(BaseModel):
     port: int
     via: str = None
     name: str = None
-    ul: int = None  # max upload traffic speed per connection(KB/s)
-    dl: int = None  # max download traffic speed per connection(KB/s)
+    ul: int = None  # max upload traffic speed per source ip(KB/s)
+    dl: int = None  # max download traffic speed per source ip(KB/s)
 
     class Config:
         use_enum_values = True
