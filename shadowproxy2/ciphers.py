@@ -14,6 +14,23 @@ def EVP_BytesToKey(password: bytes, size: int, salt: bytes = b"") -> bytes:
 
 
 class ChaCha20IETFPoly1305:
+    """
+    >>> cipher = ChaCha20IETFPoly1305('password')
+    >>> salt, encrypt = cipher.make_encrypter()
+    >>> decrypt = cipher.make_decrypter(salt)
+    >>> for length in (30, 60, 20000):
+    ...     rand_bytes = os.urandom(length)
+    ...     ciphertext = encrypt(rand_bytes)
+    ...     length_bytes = decrypt(ciphertext[:2+cipher.TAG_SIZE])
+    ...     l = int.from_bytes(length_bytes, 'big')
+    ...     if l < cipher.PACKET_LIMIT:
+    ...         assert l == length
+    ...         back_bytes = decrypt(ciphertext[2+cipher.TAG_SIZE:])
+    ...         assert rand_bytes == back_bytes
+    ...     else:
+    ...         assert l == cipher.PACKET_LIMIT
+    """
+
     KEY_SIZE = 32
     SALT_SIZE = 32
     NONCE_SIZE = 12
@@ -26,7 +43,7 @@ class ChaCha20IETFPoly1305:
             password.encode("ascii", "ignore"), size=self.KEY_SIZE
         )
 
-    def random_salt(self) -> bytes:
+    def _random_salt(self) -> bytes:
         return os.urandom(self.SALT_SIZE)
 
     def _derive_subkey(self, salt: bytes) -> bytes:
@@ -34,7 +51,7 @@ class ChaCha20IETFPoly1305:
 
     def make_encrypter(self, salt: Optional[bytes] = None) -> (bytes, Callable):
         counter = 0
-        salt = salt if salt is not None else self.random_salt()
+        salt = salt if salt is not None else self._random_salt()
         subkey = self._derive_subkey(salt)
 
         def _encrypt(plaintext: bytes) -> bytes:

@@ -25,6 +25,15 @@ grammar = Grammar(grammar)
 
 
 class URLVisitor(NodeVisitor):
+    """
+    >>> url = 'ss://chacha20-ietf-poly1305:password@:8888#name=x,ul=10,dl=20'
+    >>> tree = grammar.parse(url)
+    >>> visitor = URLVisitor()
+    >>> ns = visitor.visit(tree)
+    >>> assert ns.ul == 10
+    >>> assert ns.host == '0.0.0.0'
+    """
+
     def __init__(self):
         self.info = {
             "transport": "tcp",
