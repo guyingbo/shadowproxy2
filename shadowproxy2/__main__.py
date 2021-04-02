@@ -1,5 +1,6 @@
 import asyncio
 import resource
+from os.path import abspath, dirname, join
 
 import click
 
@@ -8,7 +9,11 @@ from .context import ProxyContext
 from .server import run_server
 from .urlparser import URLVisitor, grammar
 
-url_format = "[transport+]proxy://[username:password@][host]:port[#key=value]"
+url_format = "[transport+]proxy://[username:password@][host]:port[#key1=value1,...]"
+base_path = abspath(join(dirname(__file__), ".."))
+ssl_cert_path = join(base_path, "certs", "ssl_cert.pem")
+ssl_key_path = join(base_path, "certs", "ssl_key.pem")
+pycacert_path = join(base_path, "certs", "pycacert.pem")
 
 
 class URLParamType(click.ParamType):
@@ -60,21 +65,21 @@ def validate_urls(ctx, param, urls):
 )
 @click.option(
     "--cert-chain",
-    default="/Users/mac/Projects/aioquic/tests/ssl_cert.pem",
+    default=ssl_cert_path,
     type=click.Path(exists=True),
-    help="certificate chain file path",
+    help=f"certificate chain file path, default to {ssl_cert_path}",
 )
 @click.option(
     "--key-file",
-    default="/Users/mac/Projects/aioquic/tests/ssl_key.pem",
+    default=ssl_key_path,
     type=click.Path(exists=True),
-    help="private key file path",
+    help=f"private key file path, default to {ssl_key_path}",
 )
 @click.option(
     "--ca-cert",
-    default="/Users/mac/Projects/aioquic/tests/pycacert.pem",
+    default=pycacert_path,
     type=click.Path(exists=True),
-    help="CA certificate file path",
+    help=f"CA certificate file path, default to {pycacert_path}",
 )
 @click.option("-v", "--verbose", count=True)
 def main(
