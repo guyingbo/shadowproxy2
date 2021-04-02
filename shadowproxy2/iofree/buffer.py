@@ -1,6 +1,5 @@
 from struct import Struct
 
-import cython  # type: ignore
 
 int8 = Struct("b")
 uint8 = Struct("B")
@@ -48,7 +47,7 @@ def _chr_len(x: int):
 # [@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@] full
 #  ^tail                                     ^head
 class Buffer:
-    def __init__(self, size: cython.int = 4095):
+    def __init__(self, size: int = 4095):
         if size < 1:
             raise ValueError("size must > 0")
         self.buf = bytearray(size)
@@ -81,7 +80,7 @@ class Buffer:
     def clear(self) -> None:
         self.head = self.tail = 0
 
-    def resize(self, size) -> None:
+    def resize(self, size: int) -> None:
         if size < 1:
             raise ValueError("size must > 0")
         if self.size == size:
@@ -127,26 +126,16 @@ class Buffer:
             self.tail = 0
             self.head = length
 
-    def advance(self, nbytes):
+    def advance(self, nbytes: int) -> None:
         self.head = self.head + nbytes
 
-    def push_from_socket(self, sock):
-        nbytes = sock.recv_into(self.next())
-        self.head += nbytes
-        return nbytes
-
-    async def push_from_async(self, sock):
-        nbytes = await sock.recv_into(self.next())
-        self.head += nbytes
-        return nbytes
-
-    def scale_up(self, nbytes) -> None:
+    def scale_up(self, nbytes: int) -> None:
         self.buf.extend(b"\x00" * nbytes)
         self.size += nbytes
 
     def push_struct(self, struct_obj, *args) -> None:
-        size: cython.int = struct_obj.size
-        a_size: cython.int = self._available_size()
+        size: int = struct_obj.size
+        a_size: int = self._available_size()
         if size > a_size:
             self.scale_up(size - a_size)
         if self._right_blank_size() < size:
@@ -154,10 +143,9 @@ class Buffer:
         struct_obj.pack_into(self.buf, self.head, *args)
         self.advance(size)
 
-    @cython.locals(length=cython.int, a_size=cython.int)
     def push(self, bytes_like):
-        length = len(bytes_like)
-        a_size = self._available_size()
+        length: int = len(bytes_like)
+        a_size: int = self._available_size()
         if length > a_size:
             self.scale_up(length - a_size)
         if length > self._right_blank_size():
@@ -165,7 +153,7 @@ class Buffer:
         self.buf[self.head : self.head + length] = bytes_like
         self.advance(length)
 
-    def pull(self, nbytes=0):
+    def pull(self, nbytes: int = 0):
         if nbytes < 0:
             raise ValueError("nbytes must >= 0")
         if nbytes == 0:
@@ -181,7 +169,7 @@ class Buffer:
             self.head = self.tail = 0
         return res
 
-    def pull_amap(self, least_nbytes=1):
+    def pull_amap(self, least_nbytes: int = 1):
         """
         pull as much as possible, at least nbytes
         """
@@ -191,25 +179,24 @@ class Buffer:
             raise StarvingException
         return self.pull(0)
 
-    def peek(self, nbytes):
+    def peek(self, nbytes: int):
         if nbytes < 1:
             raise ValueError("nbytes must >= 1")
         if self._data_size() < nbytes:
             raise StarvingException
         return self.buf[self.tail : self.tail + nbytes]
 
-    def pull_int(self, nbytes, byteorder, signed):
+    def pull_int(self, nbytes: int, byteorder: str, signed: bool):
         return int.from_bytes(self.pull(nbytes), byteorder, signed=signed)
 
     def pull_struct(self, struct_obj):
-        size: cython.int = struct_obj.size
+        size: int = struct_obj.size
         if self._data_size() < size:
             raise StarvingException
         return struct_obj.unpack(self.pull(size))
 
-    @cython.locals(length=cython.int, index=cython.int)
-    def pull_until(self, bytes_like, *, init_pos=-1, return_tail=True):
-        length = len(bytes_like)
+    def pull_until(self, bytes_like, *, init_pos: int = -1, return_tail: bool = True):
+        length: int = len(bytes_like)
         if length == 0:
             raise ValueError("bytes_like must not be empty")
         if init_pos == -1:

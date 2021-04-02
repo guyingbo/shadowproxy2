@@ -1,9 +1,9 @@
+# type: ignore
 """`iofree` is an easy-to-use and powerful library \
 to help you implement network protocols and binary parsers."""
 import typing
 from struct import Struct
 
-from .buffer import Buffer
 from .parser import Parser, Traps
 
 __version__ = "0.2.4"

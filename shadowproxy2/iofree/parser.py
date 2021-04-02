@@ -1,3 +1,4 @@
+# type: ignore
 """`iofree` is an easy-to-use and powerful library \
 to help you implement network protocols and binary parsers."""
 from __future__ import annotations
@@ -5,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import typing
-from typing import Generator
+from typing import Generator, Optional
 from collections import deque
 from enum import IntEnum, auto
 from struct import Struct
@@ -45,7 +46,7 @@ class Parser:
         self._res = _no_result
         self._mapping_stack: deque = deque()
         self._next_value = None
-        self._last_trap: tuple = None
+        self._last_trap: Optional[tuple] = None
         self._pos = -1
         self._state: State = State._state_next
         self._init()
@@ -67,7 +68,7 @@ class Parser:
         """
         self.data_received(data)
         if strict and self.has_more_data():
-            raise ParseError(f"redundant data left: {self.readall()}")
+            raise ParseError(f"redundant data left: {self.readall()!r}")
         return self.get_result()
 
     def data_received(self, data: typing.ByteString | memoryview = b"") -> None:
