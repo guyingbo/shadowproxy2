@@ -1,5 +1,5 @@
 from struct import Struct
-
+from typing import Sized
 
 int8 = Struct("b")
 uint8 = Struct("B")
@@ -46,7 +46,7 @@ def _chr_len(x: int):
 #                   ^head&tail
 # [@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@] full
 #  ^tail                                     ^head
-class Buffer:
+class Buffer(Sized):
     def __init__(self, size: int = 4095):
         if size < 1:
             raise ValueError("size must > 0")
@@ -55,8 +55,8 @@ class Buffer:
         self.tail = 0
         self.size = size
 
-    def __len__(self):
-        return self._data_size()
+    def __len__(self) -> int:
+        return self.data_size
 
     def __repr__(self) -> str:
         return (
@@ -64,15 +64,13 @@ class Buffer:
             f"({bytes(self.buf)!r}, tail={self.tail}, head={self.head})"
         )
 
-    def _available_size(self):
+    @property
+    def available_size(self) -> int:
         return self.size - self.head + self.tail
 
-    available_size = property(_available_size)
-
-    def _data_size(self):
+    @property
+    def data_size(self) -> int:
         return self.head - self.tail
-
-    data_size = property(_data_size)
 
     def _right_blank_size(self):
         return self.size - self.head
@@ -109,7 +107,7 @@ class Buffer:
             print(f"{' '*len0}{'^'*len1}")
 
     def is_full(self) -> bool:
-        return self._available_size() == 0
+        return self.available_size == 0
 
     def is_empty(self) -> bool:
         return self.head == 0
@@ -117,7 +115,7 @@ class Buffer:
     def next(self) -> memoryview:
         return memoryview(self.buf)[self.head :]
 
-    def _adjust(self):
+    def _adjust(self) -> None:
         length = self.head - self.tail
         if length == 0:
             self.head = self.tail = 0
@@ -135,7 +133,7 @@ class Buffer:
 
     def push_struct(self, struct_obj, *args) -> None:
         size: int = struct_obj.size
-        a_size: int = self._available_size()
+        a_size: int = self.available_size
         if size > a_size:
             self.scale_up(size - a_size)
         if self._right_blank_size() < size:
@@ -143,9 +141,9 @@ class Buffer:
         struct_obj.pack_into(self.buf, self.head, *args)
         self.advance(size)
 
-    def push(self, bytes_like):
+    def push(self, bytes_like) -> None:
         length: int = len(bytes_like)
-        a_size: int = self._available_size()
+        a_size: int = self.available_size
         if length > a_size:
             self.scale_up(length - a_size)
         if length > self._right_blank_size():
@@ -160,7 +158,7 @@ class Buffer:
             res = b"" + self.buf[self.tail : self.head]
             self.head = self.tail = 0
             return res
-        if self._data_size() < nbytes:
+        if self.data_size < nbytes:
             raise StarvingException
         start = self.tail
         self.tail += nbytes
@@ -175,14 +173,14 @@ class Buffer:
         """
         if least_nbytes < 1:
             raise ValueError("least_nbytes must >= 1")
-        if self._data_size() < least_nbytes:
+        if self.data_size < least_nbytes:
             raise StarvingException
         return self.pull(0)
 
     def peek(self, nbytes: int):
         if nbytes < 1:
             raise ValueError("nbytes must >= 1")
-        if self._data_size() < nbytes:
+        if self.data_size < nbytes:
             raise StarvingException
         return self.buf[self.tail : self.tail + nbytes]
 
@@ -191,7 +189,7 @@ class Buffer:
 
     def pull_struct(self, struct_obj):
         size: int = struct_obj.size
-        if self._data_size() < size:
+        if self.data_size < size:
             raise StarvingException
         return struct_obj.unpack(self.pull(size))
 

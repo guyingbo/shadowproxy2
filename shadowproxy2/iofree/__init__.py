@@ -1,15 +1,14 @@
-# type: ignore
 """`iofree` is an easy-to-use and powerful library \
 to help you implement network protocols and binary parsers."""
-import typing
 from struct import Struct
+from typing import Any, Callable, Generator, Optional
 
 from .parser import Parser, Traps
 
 __version__ = "0.2.4"
 
 
-def read(nbytes: int = 0) -> typing.Generator[tuple, bytes, bytes]:
+def read(nbytes: int = 0) -> Generator[tuple, bytes, bytes]:
     """
     if nbytes = 0, read as many as possible, empty bytes is valid;
     if nbytes > 0, read *exactly* ``nbytes``
@@ -17,7 +16,7 @@ def read(nbytes: int = 0) -> typing.Generator[tuple, bytes, bytes]:
     return (yield (Traps._read, nbytes))
 
 
-def read_more(nbytes: int = 1) -> typing.Generator[tuple, bytes, bytes]:
+def read_more(nbytes: int = 1) -> Generator[tuple, bytes, bytes]:
     """
     read *at least* ``nbytes``
     """
@@ -28,21 +27,21 @@ def read_more(nbytes: int = 1) -> typing.Generator[tuple, bytes, bytes]:
 
 def read_until(
     data: bytes, *, return_tail: bool = True
-) -> typing.Generator[tuple, bytes, bytes]:
+) -> Generator[tuple, bytes, bytes]:
     """
     read until some bytes appear
     """
     return (yield (Traps._read_until, data, return_tail))
 
 
-def read_format(fmt: str) -> typing.Generator[tuple, tuple, tuple]:
+def read_format(fmt: str) -> Generator[tuple, tuple, tuple]:
     """
     read specific formatted data
     """
     return (yield (Traps._read_struct, Struct(fmt)))
 
 
-def read_struct(struct_obj: Struct) -> typing.Generator[tuple, tuple, tuple]:
+def read_struct(struct_obj: Struct) -> Generator[tuple, tuple, tuple]:
     """
     read raw struct formatted data
     """
@@ -51,7 +50,7 @@ def read_struct(struct_obj: Struct) -> typing.Generator[tuple, tuple, tuple]:
 
 def read_int(
     nbytes: int, byteorder: str = "big", *, signed: bool = False
-) -> typing.Generator[tuple, int, int]:
+) -> Generator[tuple, int, int]:
     """
     read some bytes as integer
     """
@@ -60,14 +59,14 @@ def read_int(
     return (yield (Traps._read_int, nbytes, byteorder, signed))
 
 
-def wait() -> typing.Generator[tuple, bytes, typing.Optional[object]]:
+def wait() -> Generator[tuple, bytes, Optional[object]]:
     """
     wait for next send event
     """
     return (yield (Traps._wait,))
 
 
-def peek(nbytes: int = 1) -> typing.Generator[tuple, bytes, bytes]:
+def peek(nbytes: int = 1) -> Generator[tuple, bytes, bytes]:
     """
     peek many bytes without taking them away from buffer
     """
@@ -76,22 +75,20 @@ def peek(nbytes: int = 1) -> typing.Generator[tuple, bytes, bytes]:
     return (yield (Traps._peek, nbytes))
 
 
-def wait_event() -> typing.Generator[tuple, typing.Any, typing.Any]:
+def wait_event() -> Generator[tuple, Any, Any]:
     """
     wait for an event
     """
     return (yield (Traps._wait_event,))
 
 
-def get_parser() -> typing.Generator[tuple, Parser, Parser]:
+def get_parser() -> Generator[tuple, Parser, Parser]:
     "get current parser object"
     return (yield (Traps._get_parser,))
 
 
-def parser(
-    func: typing.Callable = None, *, creator=lambda _: Parser(_)
-) -> typing.Callable:
-    def decorator(generator_func: typing.Callable) -> typing.Callable:
+def parser(func: Callable = None, *, creator=lambda _: Parser(_)) -> Callable:
+    def decorator(generator_func: Callable) -> Callable:
         "decorator function to wrap a generator"
 
         def create_parser(*args, **kwargs) -> Parser:

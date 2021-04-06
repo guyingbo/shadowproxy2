@@ -37,7 +37,7 @@ setup(
     data_files=[
         ("certs", ["certs/ssl_cert.pem", "certs/ssl_key.pem", "certs/pycacert.pem"])
     ],
-    # ext_modules=mypycify(["shadowproxy2/iofree/buffer.py"]),
+    ext_modules=mypycify(["shadowproxy2/buffer.py"]),
     install_requires=[
         "pynacl",
         "hkdf",

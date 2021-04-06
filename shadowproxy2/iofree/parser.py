@@ -1,4 +1,3 @@
-# type: ignore
 """`iofree` is an easy-to-use and powerful library \
 to help you implement network protocols and binary parsers."""
 from __future__ import annotations
@@ -6,12 +5,12 @@ from __future__ import annotations
 import asyncio
 import sys
 import typing
-from typing import Generator, Optional
 from collections import deque
 from enum import IntEnum, auto
 from struct import Struct
+from typing import Generator, Optional, Union, cast
 
-from .buffer import Buffer, StarvingException
+from ..buffer import Buffer, StarvingException
 from .exceptions import NoResult, ParseError
 
 _wait = object()
@@ -71,7 +70,7 @@ class Parser:
             raise ParseError(f"redundant data left: {self.readall()!r}")
         return self.get_result()
 
-    def data_received(self, data: typing.ByteString | memoryview = b"") -> None:
+    def data_received(self, data: Union[typing.ByteString, memoryview] = b"") -> None:
         if data:
             self.buffer.push(data)
         self._process()
@@ -140,7 +139,7 @@ class Parser:
         """
         retrieve data from input back
         """
-        return self._read(0)
+        return cast(bytes, self._read(0))
 
     def has_more_data(self) -> bool:
         "indicate whether input has some bytes left"
@@ -155,20 +154,20 @@ class Parser:
             return self._input_events.popleft()
         return _wait
 
-    def _wait(self) -> typing.Optional[object]:
+    def _wait(self) -> Optional[object]:
         if not getattr(self, "_waiting", False):
             self._waiting = True
             return _wait
         self._waiting = False
         return None
 
-    def _read(self, nbytes: int = 0) -> bytes:
+    def _read(self, nbytes: int = 0) -> Union[bytes, object]:
         try:
             return self.buffer.pull(nbytes)
         except StarvingException:
             return _wait
 
-    def _read_more(self, nbytes: int = 1) -> typing.Union[object, bytes]:
+    def _read_more(self, nbytes: int = 1) -> Union[bytes, object]:
         try:
             return self.buffer.pull_amap(nbytes)
         except StarvingException:
@@ -176,7 +175,7 @@ class Parser:
 
     def _read_until(
         self, data: bytes, return_tail: bool = True
-    ) -> typing.Union[object, bytes]:
+    ) -> Union[bytes, object]:
         try:
             res = self.buffer.pull_until(
                 data, init_pos=self._pos, return_tail=return_tail
@@ -187,7 +186,7 @@ class Parser:
             self._pos = e.args[0]
             return _wait
 
-    def _read_struct(self, struct_obj: Struct) -> typing.Union[object, tuple]:
+    def _read_struct(self, struct_obj: Struct) -> Union[tuple, object]:
         try:
             return self.buffer.pull_struct(struct_obj)
         except StarvingException:
@@ -195,19 +194,19 @@ class Parser:
 
     def _read_int(
         self, nbytes: int, byteorder: str = "big", signed: bool = False
-    ) -> typing.Union[object, int]:
+    ) -> Union[int, object]:
         try:
             return self.buffer.pull_int(nbytes, byteorder, signed)
         except StarvingException:
             return _wait
 
-    def _peek(self, nbytes: int = 1) -> typing.Union[object, bytes]:
+    def _peek(self, nbytes: int = 1) -> Union[bytes, object]:
         try:
             return self.buffer.peek(nbytes)
         except StarvingException:
             return _wait
 
-    def _get_parser(self) -> "Parser":
+    def _get_parser(self) -> Parser:
         return self
 
     def write(self, data: bytes) -> None:
