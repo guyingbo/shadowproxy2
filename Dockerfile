@@ -4,7 +4,15 @@ WORKDIR /app/ShadowProxy
 
 ADD . .
 
-RUN python -m pip install mypyc
+RUN apt-get update
+
+RUN apt-get install -y gcc
+
+RUN apt-get clean
+
+RUN python -m pip install -U pip
+
+RUN python -m pip install mypy
 
 RUN python setup.py install
 

@@ -27,7 +27,7 @@ class StarvingException(Exception):
     pass
 
 
-def _chr_len(x: int):
+def _chr_len(x: int) -> int:
     return len(repr(chr(x))) - 2
 
 
