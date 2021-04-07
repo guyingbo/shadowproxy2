@@ -1,4 +1,5 @@
 import sys
+import ipaddress
 
 from parsimonious.grammar import Grammar
 from parsimonious.nodes import NodeVisitor
@@ -9,9 +10,11 @@ grammar = r"""
 url         = (transport "+")? proxy "://" (username ":" password "@")? host? ":" port ("#" pair ("," pair)* )?
 transport   = "tcp" / "kcp" / "quic" / "udp" / "tls"
 proxy       = "ss" / "socks5" / "socks4" / "http" / "tunnel" / "red"
-host        = ipv4 / fqdn
+host        = ipv4 / fqdn / ipv6repr
 ipv4        = ~r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}"
 fqdn        = ~r"([0-9a-z]((-[0-9a-z])|[0-9a-z])*\.){0,4}[a-z]+"i
+ipv6repr    = "{" ipv6 "}"
+ipv6        = ~r"[\w:]+"
 username    = ~r"[\w-]+"
 password    = ~r"[\w-]+"
 port        = ~r"\d+"
@@ -55,7 +58,14 @@ class URLVisitor(NodeVisitor):
         self.info["password"] = node.text
 
     def visit_host(self, node, visited_children):
-        self.info["host"] = node.text
+        expr_name = node.children[0].expr_name
+        if expr_name == "ipv6repr":
+            host = ipaddress.ip_address(node.text[1:-1]).compressed
+        elif expr_name == "ipv4":
+            host = ipaddress.ip_address(node.text).compressed
+        else:
+            host = node.text
+        self.info["host"] = host
 
     def visit_port(self, node, visited_children):
         self.info["port"] = int(node.text)

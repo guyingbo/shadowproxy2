@@ -1,6 +1,6 @@
 FROM python:3.9-slim
 
-WORKDIR /app/ShadowProxy
+WORKDIR /app
 
 ADD . .
 
@@ -12,11 +12,11 @@ RUN apt-get clean
 
 RUN python -m pip install -U pip
 
-RUN python -m pip install mypy
+RUN python -m pip install -U mypy
 
 RUN python setup.py install
 
-RUN rm -rf /app/ShadowProxy
+RUN rm -rf /app
 
 WORKDIR /root
 
