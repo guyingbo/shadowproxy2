@@ -7,7 +7,8 @@ from parsimonious.nodes import NodeVisitor
 from .models import BoundNamespace
 
 grammar = r"""
-url         = (transport "+")? proxy "://" (username ":" password "@")? host? ":" port ("#" pair ("," pair)* )?
+url         = (transport "+")? proxy "://" (username ":" password "@")? host? ":" port
+              ("#" pair ("," pair)* )?
 transport   = "tcp" / "kcp" / "quic" / "udp" / "tls"
 proxy       = "ss" / "socks5" / "socks4" / "http" / "tunnel" / "red"
 host        = ipv4 / fqdn / ipv6repr
@@ -35,6 +36,11 @@ class URLVisitor(NodeVisitor):
     >>> ns = visitor.visit(tree)
     >>> assert ns.ul == 10
     >>> assert ns.host == '0.0.0.0'
+    >>> url = 'socks5://username:password@{::1}:8888'
+    >>> tree = grammar.parse(url)
+    >>> visitor = URLVisitor()
+    >>> ns = visitor.visit(tree)
+    >>> assert ns.host == '::1'
     """
 
     def __init__(self):
