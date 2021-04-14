@@ -11,7 +11,7 @@ async def run_server(ctx_list):
     async with contextlib.AsyncExitStack() as stack:
         for ctx in ctx_list:
             ctx.stack = stack
-            print(f"server running at {ctx.inbound_ns} -> {ctx.outbound_ns}")
+            print(f"server running at {ctx.inbound_ns} -> {ctx.outbound_ns}", flush=True)
             await ctx.create_server()
 
         await quit_event.wait()

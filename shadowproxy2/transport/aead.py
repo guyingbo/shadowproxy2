@@ -4,13 +4,17 @@ from .. import app
 from .base import InboundBase, OutboundBase
 
 
+def blank():
+    pass
+
+
 class AEADInbound(asyncio.Protocol, InboundBase):
     def __init__(self, ctx):
         self.ctx = ctx
         self.aead_parser = ctx.create_inbound_parser()
         self.parser = ctx.create_server_parser()
         self.data_callback = self.parser.data_received
-        self.eof_callback = self.parser.eof_received
+        self.eof_callback = blank
         self.task = asyncio.create_task(ctx.run_proxy(self))
         self.task.add_done_callback(ctx.get_task_callback(repr(self)))
 
@@ -51,7 +55,7 @@ class AEADOutbound(asyncio.Protocol, OutboundBase):
         self.target_addr = target_addr
         self.parser = self.ctx.create_client_parser(target_addr)
         self.data_callback = self.parser.data_received
-        self.eof_callback = self.parser.eof_received
+        self.eof_callback = blank
         self.aead_parser = ctx.create_outbound_parser()
 
     def data_received(self, data):

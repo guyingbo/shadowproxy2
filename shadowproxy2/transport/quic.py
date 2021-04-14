@@ -48,7 +48,8 @@ class QuicStream:
         self.parser.data_received(data)
 
     def eof_received(self):
-        self.parser.eof_received()
+        # self.parser.eof_received()
+        ...
 
     def close(self):
         self.write_eof()
