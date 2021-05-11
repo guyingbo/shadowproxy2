@@ -6,15 +6,14 @@ from functools import cached_property, partial
 from aioquic import asyncio as aio
 from aioquic.quic.configuration import QuicConfiguration
 
-from .iofree.parser import AsyncioParser
-
 from . import app
 from .ciphers import ChaCha20IETFPoly1305
+from .iofree.parser import AsyncioParser
 from .parsers import aead, socks4, socks5
+from .throttle import ProtocolProxy, Throttle
 from .transport.aead import AEADInbound, AEADOutbound
 from .transport.quic import QuicInbound, QuicOutbound
 from .transport.tcp import TCPInbound, TCPOutbound
-from .throttle import ProtocolProxy, Throttle
 
 
 class ProxyContext:
@@ -102,6 +101,7 @@ class ProxyContext:
             lambda: self.create_inbound_proxy(Inbound(self)),
             self.inbound_ns.host,
             self.inbound_ns.port,
+            reuse_port=True,
             ssl=sslcontext,
         )
         return await self.stack.enter_async_context(server)
