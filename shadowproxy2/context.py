@@ -220,7 +220,7 @@ class ProxyContext:
                 if app.settings.verbose > 0:
                     print(info, "cancelled")
                 return
-            if exc and app.settings.verbose > 0:
+            if exc and app.settings.verbose > 1:
                 print(info, ":", exc)
 
         return task_callback
