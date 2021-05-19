@@ -41,16 +41,16 @@ class AEADParser(NullParser):
         outbound_stream = await inbound_stream.ctx.create_client(
             target_addr, inbound_stream.source_addr
         )
+        packet, self.encrypt = self.cipher.make_encrypter()
+        self.transport.write(packet)
         return outbound_stream
 
     def write(self, data):
-        packet = b""
-        if not hasattr(self, "encrypt"):
-            packet, self.encrypt = self.cipher.make_encrypter()
-        packet += self.encrypt(data)
-        if not self.transport.is_closing():
-            self.transport.write(packet)
+        packet = self.encrypt(data)
+        self.transport.write(packet)
 
     async def init_client(self, target_addr):
+        packet, self.encrypt = self.cipher.make_encrypter()
+        self.transport.write(packet)
         addr = Addr.from_tuple(target_addr)
         self.write(addr.binary)

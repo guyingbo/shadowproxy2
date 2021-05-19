@@ -9,7 +9,7 @@ from aioquic.quic.configuration import QuicConfiguration
 
 from . import app
 from .ciphers import ChaCha20IETFPoly1305
-from .parsers import aead, socks4, socks5
+from .parsers import aead, socks4, socks5, http
 from .parsers.base import NullParser
 from .throttle import ProtocolProxy, Throttle
 from .transport.quic import QuicInbound, QuicOutbound
@@ -43,6 +43,9 @@ class ProxyContext:
             return socks4.Socks4Parser()
         elif proxy == "ss":
             return aead.AEADParser(self.inbound_cipher)
+        elif proxy == "http":
+            ns = self.inbound_ns
+            return http.HTTPParser(ns.username, ns.password)
         else:
             raise Exception(f"Unknown proxy type: {proxy}")
 
@@ -57,6 +60,9 @@ class ProxyContext:
             return socks4.Socks4Parser()
         elif proxy == "ss":
             return aead.AEADParser(self.outbound_cipher)
+        elif proxy == "http":
+            ns = self.outbound_ns
+            return http.HTTPParser(ns.username, ns.password)
         else:
             raise Exception(f"Unknown proxy type: {proxy}")
 

@@ -2,12 +2,16 @@ import base64
 import re
 from urllib.parse import urlparse
 
-from .. import iofree
-from ..iofree import schema
-from ..iofree.exceptions import ProtocolError
+from ..aiobuffer import buffer as schema
+from ..aiobuffer.buffer import AioBuffer
+from .base import NullParser
 
 HTTP_LINE = re.compile(b"([^ ]+) +(.+?) +(HTTP/[^ ]+)")
 ABSOLUTE_PREFIX = re.compile(r"^(.*://)?[^/]*")
+
+
+class ProtocolError(Exception):
+    ...
 
 
 class HTTPResponse(schema.BinarySchema):
@@ -53,65 +57,69 @@ class HTTPRequest(schema.BinarySchema):
         )
 
 
-def server(username: str, password: str):
-    auth = (username.encode(), password.encode())
-    parser = yield from iofree.get_parser()
-    request = yield from HTTPRequest.get_value()
-    if auth:
-        pauth = request.headers.get(b"Proxy-Authorization", None)
-        httpauth = b"Basic " + base64.b64encode(b":".join(auth))
-        if httpauth != pauth:
-            parser.write(
-                request.ver + b" 407 Proxy Authentication Required\r\n"
-                b"Connection: close\r\n"
-                b'Proxy-Authenticate: Basic realm="Shadowproxy Auth"\r\n\r\n'
-            )
-            parser.close()
-            raise ProtocolError("Unauthorized HTTP Request")
-    if request.method == b"CONNECT":
-        host, _, port = request.path.partition(b":")
-        target_addr = (host.decode(), int(port))
-    else:
-        raise ProtocolError("only http connect is supported")
-        url = urlparse(request.path)
-        if not url.hostname:
-            error_msg = "hostname is needed"
-            parser.write(
-                b"HTTP/1.1 200 OK\r\n"
-                b"Connection: close\r\n"
-                b"Content-Type: text/plain\r\n"
-                b"Content-Length: 2\r\n\r\n"
-            )
-            parser.write(error_msg.encode())
-            raise ProtocolError(error_msg)
-        target_addr = (url.hostname.decode(), url.port or 80)
-    parser.respond(target_addr)
-    yield from parser.wait_event()
-    if request.method == b"CONNECT":
-        parser.write(b"HTTP/1.1 200 Connection: Established\r\n\r\n")
+class HTTPParser(NullParser):
+    def __init__(self, username: str, password: str):
+        self.username = username
+        self.password = password
+        self.buffer = AioBuffer()
+        if username is None or password is None:
+            self.auth = None
+        else:
+            self.auth = self.username.encode(), self.password.encode()
 
-
-def client(target_host: str, target_port: int, username: str, password: str):
-    parser = yield from iofree.get_parser()
-    target_address = f"{target_host}:{target_port}"
-    if username is None or password is None:
-        auth = None
-    else:
-        auth = username.encode(), password.encode()
-    headers_str = (
-        f"CONNECT {target_address} HTTP/1.1\r\n"
-        f"Host: {target_address}\r\n"
-        f"User-Agent: shadowproxy\r\n"
-        "Proxy-Connection: Keep-Alive\r\n"
-    )
-    if auth:
-        headers_str += "Proxy-Authorization: Basic {}\r\n".format(
-            base64.b64encode(b":".join(auth)).decode()
+    async def server(self, inbound_stream):
+        request = await self.buffer.pull(HTTPRequest)
+        if self.auth:
+            pauth = request.headers.get(b"Proxy-Authorization", None)
+            httpauth = b"Basic " + base64.b64encode(b":".join(self.auth))
+            if httpauth != pauth:
+                self.transport.write(
+                    request.ver + b" 407 Proxy Authentication Required\r\n"
+                    b"Connection: close\r\n"
+                    b'Proxy-Authenticate: Basic realm="Shadowproxy Auth"\r\n\r\n'
+                )
+                self.transport.close()
+                raise ProtocolError("Unauthorized HTTP Request")
+        if request.method == b"CONNECT":
+            host, _, port = request.path.partition(b":")
+            target_addr = (host.decode(), int(port))
+        else:
+            raise ProtocolError("only http connect is supported")
+            url = urlparse(request.path)
+            if not url.hostname:
+                error_msg = "hostname is needed"
+                self.transport.write(
+                    b"HTTP/1.1 200 OK\r\n"
+                    b"Connection: close\r\n"
+                    b"Content-Type: text/plain\r\n"
+                    b"Content-Length: 2\r\n\r\n"
+                )
+                self.transport.write(error_msg.encode())
+                raise ProtocolError(error_msg)
+            target_addr = (url.hostname.decode(), url.port or 80)
+        outbound_stream = await inbound_stream.ctx.create_client(
+            target_addr, inbound_stream.source_addr
         )
-    headers_str += "\r\n"
-    parser.write(headers_str.encode())
+        if request.method == b"CONNECT":
+            self.transport.write(b"HTTP/1.1 200 Connection: Established\r\n\r\n")
+        return outbound_stream
 
-    response = yield from HTTPResponse.get_value()
-
-    if response.code != b"200":
-        raise ProtocolError(f"bad status code: {response.code} {response.status}")
+    async def init_client(self, target_addr):
+        target_host, target_port = target_addr
+        target_address = f"{target_host}:{target_port}"
+        headers_str = (
+            f"CONNECT {target_address} HTTP/1.1\r\n"
+            f"Host: {target_address}\r\n"
+            f"User-Agent: shadowproxy\r\n"
+            "Proxy-Connection: Keep-Alive\r\n"
+        )
+        if self.auth:
+            headers_str += "Proxy-Authorization: Basic {}\r\n".format(
+                base64.b64encode(b":".join(self.auth)).decode()
+            )
+        headers_str += "\r\n"
+        self.transport.write(headers_str.encode())
+        response = await self.buffer.pull(HTTPResponse)
+        if response.code != b"200":
+            raise ProtocolError(f"bad status code: {response.code} {response.status}")
+        return response
