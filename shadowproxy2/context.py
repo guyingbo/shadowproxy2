@@ -152,7 +152,8 @@ class ProxyContext:
                 configuration.load_verify_locations(str(app.settings.ca_cert))
                 configuration.verify_mode = ssl.CERT_NONE
 
-                # important: The async context manager must be hold here(reference count > 0), otherwise quic connection will be closed.
+                # important: The async context manager must be hold here
+                # (reference count > 0), otherwise quic connection will be closed.
                 quic_outbound_acm = aio.connect(
                     self.outbound_ns.host,
                     self.outbound_ns.port,
@@ -171,7 +172,6 @@ class ProxyContext:
         outbound_stream = await inbound_stream.parser.server(inbound_stream)
         if app.settings.verbose > 0:
             print(inbound_stream, "->", outbound_stream)
-
         await outbound_stream.parser.init_client(outbound_stream.target_addr)
         inbound_stream.parser.relay(outbound_stream.parser)
         outbound_stream.parser.relay(inbound_stream.parser)
