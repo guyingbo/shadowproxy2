@@ -7,7 +7,7 @@ from .base import InboundBase, OutboundBase
 class TCPInbound(asyncio.Protocol, InboundBase):
     def __init__(self, ctx):
         self.ctx = ctx
-        self.parser = ctx.create_server_parser()
+        self.parser = ctx.create_server_parser(self)
         self.task = asyncio.create_task(ctx.run_proxy(self))
         self.task.add_done_callback(ctx.get_task_callback(repr(self)))
 
@@ -21,13 +21,16 @@ class TCPInbound(asyncio.Protocol, InboundBase):
         if exc is not None and app.settings.verbose > 0:
             print(f"{self} connection lost:", exc)
         self.transport.close()
+        self.parser.close()
 
     def data_received(self, data):
-        self.parser.data_received(data)
+        self.parser.push(data)
+
+    def eof_received(self):
+        self.parser.push_eof()
 
     def write(self, data):
-        if not self.transport.is_closing():
-            self.transport.write(data)
+        self.parser.write(data)
 
     def write_eof(self):
         if self.transport.can_write_eof():
@@ -41,23 +44,23 @@ class TCPOutbound(asyncio.Protocol, OutboundBase):
 
     def connection_made(self, transport):
         self.transport = transport
-        self.parser = self.ctx.create_client_parser(self.target_addr)
-        if self.parser:
-            self.parser.set_transport(transport)
-            self.parser.data_received(b"")
+        self.parser = self.ctx.create_client_parser()
+        self.parser.set_transport(transport)
 
     def connection_lost(self, exc):
         if exc is not None and app.settings.verbose > 0:
             print(f"{self} connection lost:", exc)
         self.transport.close()
+        self.parser.close()
 
     def data_received(self, data):
-        if self.parser:
-            self.parser.data_received(data)
+        self.parser.push(data)
+
+    def eof_received(self):
+        self.parser.push_eof()
 
     def write(self, data):
-        if not self.transport.is_closing():
-            self.transport.write(data)
+        self.parser.write(data)
 
     def write_eof(self):
         if self.transport.can_write_eof():
