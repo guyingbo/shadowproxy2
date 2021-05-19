@@ -10,7 +10,7 @@ from enum import IntEnum, auto
 from struct import Struct
 from typing import Generator, Optional, Union, cast
 
-from ..buffer import Buffer, StarvingException
+from .buffer import Buffer, StarvingException
 from .exceptions import NoResult, ParseError
 
 _wait = object()

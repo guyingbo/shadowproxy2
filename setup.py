@@ -1,7 +1,6 @@
 import os.path
 import re
 
-from mypyc.build import mypycify
 from setuptools import find_namespace_packages, setup
 
 VERSION_RE = re.compile(r"""__version__ = ['"]([0-9.]+)['"]""")
@@ -35,9 +34,9 @@ setup(
     url="https://github.com/guyingbo/shadowproxy2",
     packages=find_namespace_packages(include=["shadowproxy2*"]),
     data_files=[
-        ("certs", ["certs/ssl_cert.pem", "certs/ssl_key.pem", "certs/pycacert.pem"])
+        ("certs", ["certs/ssl_cert.pem", "certs/ssl_key.pem", "certs/pycacert.pem"]),
+        ("assets", ["assets/p2p_ip.txt"]),
     ],
-    ext_modules=mypycify(["shadowproxy2/buffer.py"]),
     install_requires=[
         "pynacl",
         "hkdf",
@@ -45,6 +44,8 @@ setup(
         "pydantic",
         "aioquic",
         "parsimonious",
+        "uvloop",
+        "websockets",
     ],
     entry_points={"console_scripts": ["shadowproxy = shadowproxy2.__main__:main"]},
     classifiers=[

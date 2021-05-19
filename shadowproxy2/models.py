@@ -10,6 +10,8 @@ class TransportEnum(Enum):
     quic = "quic"
     udp = "udp"
     tls = "tls"
+    ws = "ws"
+    wss = "wss"
 
 
 @unique
@@ -37,6 +39,7 @@ class BoundNamespace(BaseModel):
     proxy: ProxyEnum
     username: str = None
     password: str = None
+    path: str = None
     host: str
     port: int
     via: str = None

@@ -8,8 +8,8 @@ from .models import BoundNamespace
 
 grammar = r"""
 url         = (transport "+")? proxy "://" (username ":" password "@")? host? ":" port
-              ("#" pair ("," pair)* )?
-transport   = "tcp" / "kcp" / "quic" / "udp" / "tls"
+              path? ("#" pair ("," pair)* )?
+transport   = "tcp" / "kcp" / "quic" / "udp" / "tls" / "wss" / "ws"
 proxy       = "ss" / "socks5" / "socks4" / "http" / "tunnel" / "red"
 host        = ipv4 / fqdn / ipv6repr
 ipv4        = ~r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}"
@@ -18,6 +18,7 @@ ipv6repr    = "{" ipv6 "}"
 ipv6        = ~r"[\w:]+"
 username    = ~r"[\w-]+"
 password    = ~r"[\w-]+"
+path        = ~r"/[\w-]*"
 port        = ~r"\d+"
 pair        = key "=" value
 key         = "via" / "name" / "ul" / "dl"
@@ -75,6 +76,9 @@ class URLVisitor(NodeVisitor):
 
     def visit_port(self, node, visited_children):
         self.info["port"] = int(node.text)
+
+    def visit_path(self, node, visited_children):
+        self.info["path"] = node.text
 
     def visit_pair(self, node, visited_children):
         self.info[node.children[0].text] = node.children[2].text
