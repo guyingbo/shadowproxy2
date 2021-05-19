@@ -12,8 +12,6 @@ RUN apt-get clean
 
 RUN python -m pip install -U pip
 
-RUN python -m pip install -U mypy
-
 RUN python setup.py install
 
 RUN rm -rf /app
