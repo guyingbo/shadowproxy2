@@ -29,13 +29,6 @@ class TCPInbound(asyncio.Protocol, InboundBase):
     def eof_received(self):
         self.parser.push_eof()
 
-    def write(self, data):
-        self.parser.write(data)
-
-    def write_eof(self):
-        if self.transport.can_write_eof():
-            self.transport.write_eof()
-
 
 class TCPOutbound(asyncio.Protocol, OutboundBase):
     def __init__(self, ctx, target_addr):
@@ -58,10 +51,3 @@ class TCPOutbound(asyncio.Protocol, OutboundBase):
 
     def eof_received(self):
         self.parser.push_eof()
-
-    def write(self, data):
-        self.parser.write(data)
-
-    def write_eof(self):
-        if self.transport.can_write_eof():
-            self.transport.write_eof()

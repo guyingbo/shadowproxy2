@@ -40,7 +40,7 @@ class ProxyContext:
             ns = self.inbound_ns
             return socks5.Socks5Parser(ns.username, ns.password)
         elif proxy == "socks4":
-            return socks4.server()
+            return socks4.Socks4Parser()
         elif proxy == "ss":
             return aead.AEADParser(self.inbound_cipher)
         else:
@@ -54,7 +54,7 @@ class ProxyContext:
             ns = self.outbound_ns
             return socks5.Socks5Parser(ns.username, ns.password)
         elif proxy == "socks4":
-            return socks4.client()
+            return socks4.Socks4Parser()
         elif proxy == "ss":
             return aead.AEADParser(self.outbound_cipher)
         else:

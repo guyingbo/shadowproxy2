@@ -45,11 +45,10 @@ class QuicStream:
         self.quic._transmit_soon()
 
     def data_received(self, data):
-        self.parser.data_received(data)
+        self.parser.push(data)
 
     def eof_received(self):
-        # self.parser.eof_received()
-        ...
+        self.parser.push_eof()
 
     def close(self):
         self.write_eof()
@@ -112,7 +111,7 @@ class QuicOutboundStream(QuicStream):
     def __init__(self, quic_outbound: QuicOutbound, stream_id: int, target_addr):
         self.quic = quic_outbound
         self.stream_id = stream_id
+        self.target_addr = target_addr
         self.ctx = quic_outbound.ctx
-        self.parser = self.ctx.create_client_parser(target_addr)
+        self.parser = self.ctx.create_client_parser()
         self.parser.set_transport(self)
-        self.parser.data_received(b"")

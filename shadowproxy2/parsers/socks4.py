@@ -1,8 +1,9 @@
 import enum
 import socket
 
-from .. import iofree
-from ..iofree import schema
+from ..aiobuffer import buffer as schema
+from ..aiobuffer.buffer import AioBuffer
+from .base import NullParser
 
 
 class Cmd(enum.IntEnum):
@@ -18,9 +19,9 @@ class Rep(enum.IntEnum):
 
 
 class ClientRequest(schema.BinarySchema):
-    ver = schema.MustEqual(schema.uint8, 4)
-    cmd = schema.SizedIntEnum(schema.uint8, Cmd)
-    dst_port = schema.uint16be
+    ver = schema.MustEqual(schema.u8, 4)
+    cmd = schema.SizedIntEnum(schema.u8, Cmd)
+    dst_port = schema.u16be
     dst_ip = schema.Convert(
         schema.Bytes(4), encode=socket.inet_aton, decode=socket.inet_ntoa
     )
@@ -29,8 +30,8 @@ class ClientRequest(schema.BinarySchema):
 
 class Response(schema.BinarySchema):
     vn = schema.MustEqual(schema.Bytes(1), b"\x00")
-    rep = schema.SizedIntEnum(schema.uint8, Rep)
-    dst_port = schema.uint16be
+    rep = schema.SizedIntEnum(schema.u8, Rep)
+    dst_port = schema.u16be
     dst_ip = schema.Convert(
         schema.Bytes(4), encode=socket.inet_aton, decode=socket.inet_ntoa
     )
@@ -39,29 +40,37 @@ class Response(schema.BinarySchema):
 domain = schema.EndWith(b"\x00")
 
 
-def server():
-    parser = yield from iofree.get_parser()
-    request = yield from ClientRequest.get_value()
-    if request.dst_ip.startswith("0.0.0"):
-        host = yield from domain.get_value()
-        addr = (host, request.dst_port)
-    else:
-        addr = (request.dst_ip, request.dst_port)
-    assert request.cmd is Cmd.connect
-    parser.respond(addr)
-    rep = yield from iofree.wait_event()
-    parser.write(Response(..., Rep(rep), 0, "0.0.0.0").binary)
+class Socks4Parser(NullParser):
+    def __init__(self):
+        self.buffer = AioBuffer()
 
+    async def server(self, inbound_stream):
+        request = await self.buffer.pull(ClientRequest)
+        if request.dst_ip.startswith("0.0.0"):
+            host = await self.buffer.pull(domain)
+            addr = (host, request.dst_port)
+        else:
+            addr = (request.dst_ip, request.dst_port)
+        assert request.cmd is Cmd.connect
+        outbound_stream = await inbound_stream.ctx.create_client(
+            addr, inbound_stream.source_addr
+        )
+        self.transport.write(Response(..., Rep(0), 0, "0.0.0.0").binary)
+        return outbound_stream
 
-def client(target_host: str, target_port: int):
-    parser = yield from iofree.get_parser()
-    tail = b""
-    try:
-        request = ClientRequest(..., Cmd.connect, target_port, target_host, b"\x01\x01")
-    except OSError:
-        request = ClientRequest(..., Cmd.connect, target_port, "0.0.0.1", b"\x01\x01")
-        tail = domain(target_host.encode())
-    parser.write(request.binary + tail)
-    response = yield from Response.get_value()
-    assert response.rep is Rep.granted
-    parser.respond(response)
+    async def init_client(self, target_addr):
+        tail = b""
+        target_host, target_port = target_addr
+        try:
+            request = ClientRequest(
+                ..., Cmd.connect, target_port, target_host, b"\x01\x01"
+            )
+        except OSError:
+            request = ClientRequest(
+                ..., Cmd.connect, target_port, "0.0.0.1", b"\x01\x01"
+            )
+            tail = domain(target_host.encode())
+        self.transport.write(request.binary + tail)
+        response = await self.buffer.pull(Response)
+        assert response.rep is Rep.granted
+        return response
