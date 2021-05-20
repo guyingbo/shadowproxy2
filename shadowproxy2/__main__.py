@@ -39,7 +39,10 @@ URL = URLParamType()
 def validate_urls(ctx, param, urls):
     for url in urls:
         if url.proxy == "socks4" and (url.username or url.password):
-            print("socks4 does not support authorization, ignore username and password")
+            click.secho(
+                "socks4 does not support authorization, ignore username and password",
+                fg="red",
+            )
             # raise click.BadParameter("haha")
         if url.proxy == "ss" and url.username not in ("chacha20-ietf-poly1305",):
             raise click.BadParameter("supported ss ciphers: chacha20-ietf-poly1305")

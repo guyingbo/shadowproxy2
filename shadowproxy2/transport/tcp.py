@@ -1,5 +1,7 @@
 import asyncio
 
+import click
+
 from .. import app
 
 
@@ -31,7 +33,7 @@ class TCPInbound(asyncio.Protocol):
     def connection_lost(self, exc):
         # self.task.cancel()
         if exc is not None and app.settings.verbose > 0:
-            print(f"{self} connection lost:", exc)
+            click.secho(f"{self} connection lost: {exc}", fg="yellow")
         self.parser.close()
         self.transport.close()
 
@@ -69,7 +71,7 @@ class TCPOutbound(asyncio.Protocol):
 
     def connection_lost(self, exc):
         if exc is not None and app.settings.verbose > 0:
-            print(f"{self} connection lost:", exc)
+            click.secho(f"{self} connection lost: {exc}", fg="yellow")
         self.parser.close()
         self.transport.close()
 

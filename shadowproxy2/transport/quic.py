@@ -1,4 +1,5 @@
 import asyncio
+import click
 from functools import cache
 
 from aioquic.asyncio import QuicConnectionProtocol
@@ -19,14 +20,20 @@ class QuicInbound(QuicConnectionProtocol):
             if stream is None:
                 stream = QuicInboundStream(self, event.stream_id)
                 self._bound_streams[event.stream_id] = stream
-            stream.data_received(event.data)
+            if event.data:
+                stream.data_received(event.data)
             if event.end_stream:
-                self._bound_streams.pop(event.stream_id, None)
+                s = self._bound_streams.pop(event.stream_id, None)
+                if s is not None:
+                    s.eof_received()
         elif isinstance(event, ConnectionTerminated):
             self._bound_streams.clear()
             if event.error_code != 0 and app.settings.verbose > 0:
-                print("quic server connection terminated:", event.reason_phrase)
-        super().quic_event_received(event)
+                click.secho(
+                    f"quic server connection terminated: {event.reason_phrase}",
+                    fg="yellow",
+                )
+        # super().quic_event_received(event)
 
 
 class QuicStream:
@@ -46,16 +53,22 @@ class QuicStream:
         self.quic._transmit_soon()
 
     def data_received(self, data):
-        self.parser.push(data)
+        try:
+            self.parser.push(data)
+        except Exception as e:
+            click.secho(f"{self}: {e}", fg="red")
 
     def eof_received(self):
-        self.parser.push_eof()
+        try:
+            self.parser.push_eof()
+        except Exception as e:
+            click.secho(f"{self}: {e}", fg="red")
 
     def can_write_eof(self):
         return True
 
     def close(self):
-        self.quic._bound_streams.pop(self.stream_id, None)
+        pass
 
 
 class QuicInboundStream(QuicStream):
@@ -99,29 +112,33 @@ class QuicOutbound(QuicConnectionProtocol):
         if isinstance(event, StreamDataReceived):
             stream = self._bound_streams.get(event.stream_id)
             if stream is None:
-                print(
-                    f"non-exist stream id received: {event.stream_id}, {type(event.stream_id)}, {event.data}, {event.end_stream}"
+                click.secho(
+                    f"non-exist stream {event.stream_id} receive: {event.data}",
+                    fg="red",
                 )
-                print(self._bound_streams.keys())
                 return
-            stream.data_received(event.data)
+            if event.data:
+                stream.data_received(event.data)
             if event.end_stream:
-                # self._bound_streams.pop(event.stream_id, None)
-                print(event.stream_id, 'poped')
+                s = self._bound_streams.pop(event.stream_id, None)
+                if s is not None:
+                    s.eof_received()
         elif isinstance(event, ConnectionTerminated):
             self._terminated_event.set()
             self._bound_streams.clear()
             self.ctx.quic_outbound = None
             if event.error_code != 0 and app.settings.verbose > 0:
-                print("quic client connection terminated:", event.reason_phrase)
-        super().quic_event_received(event)
+                click.secho(
+                    f"quic client connection terminated: {event.reason_phrase}",
+                    fg="red",
+                )
+        # super().quic_event_received(event)
 
     def create_stream(self, target_addr):
         stream_id = self._quic.get_next_available_stream_id()
         self._quic._get_or_create_stream_for_send(stream_id)
         stream = QuicOutboundStream(self, stream_id, target_addr)
         self._bound_streams[stream_id] = stream
-        print(stream_id, "created")
         return stream
 
 

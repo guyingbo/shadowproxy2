@@ -1,4 +1,5 @@
 import asyncio
+import click
 import contextlib
 import ssl
 import traceback
@@ -144,7 +145,7 @@ class ProxyContext:
                 )
             except OSError as e:
                 if app.settings.verbose > 1:
-                    print(e, "retrying...")
+                    click.secho(f"{e} retrying...")
                 if i == 0:
                     raise
             else:
@@ -169,7 +170,6 @@ class ProxyContext:
                 self.quic_outbound = await self.stack.enter_async_context(
                     quic_outbound_acm
                 )
-                print('create outbound')
                 await self.quic_outbound.wait_connected()
             outbound_stream = self.quic_outbound.create_stream(target_addr)
         self.create_outbound_proxy(outbound_stream, source_addr)
@@ -197,10 +197,10 @@ class ProxyContext:
                 exc = task.exception()
             except asyncio.CancelledError:
                 if app.settings.verbose > 0:
-                    print(info, "cancelled")
+                    click.secho(f"{info} cancelled", fg="yellow")
                 return
             if exc and app.settings.verbose > 0:
-                print(info, ":", exc)
+                click.secho(f"{info} : {exc}", fg="magenta")
                 if app.settings.verbose > 1:
                     traceback.print_tb(exc.__traceback__)
 
