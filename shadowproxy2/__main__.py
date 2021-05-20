@@ -3,6 +3,7 @@ import resource
 from os.path import abspath, dirname, join
 
 import click
+import uvloop
 
 from . import app
 from .context import ProxyContext
@@ -108,6 +109,7 @@ def main(
         )
         for inbound_ns in inbound_list
     ]
+    uvloop.install()
     asyncio.run(run_server(ctx_list))
 
 

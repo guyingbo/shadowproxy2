@@ -31,9 +31,11 @@ class AEADParser(NullParser):
 
     def push(self, data):
         self._cipher_buf.extend(data)
-        plaintext = self._reader.send(None)
-        if plaintext is not None:
-            self.buffer.push(plaintext)
+        while True:
+            plaintext = self._reader.send(None)
+            if plaintext is not None:
+                self.buffer.push(plaintext)
+            return
 
     async def server(self, inbound_stream):
         addr = await self.buffer.pull(Addr)

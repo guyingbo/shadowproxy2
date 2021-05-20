@@ -43,6 +43,7 @@ setup(
         "pydantic",
         "aioquic",
         "parsimonious",
+        "uvloop",
     ],
     entry_points={"console_scripts": ["shadowproxy = shadowproxy2.__main__:main"]},
     classifiers=[

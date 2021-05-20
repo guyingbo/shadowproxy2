@@ -34,7 +34,7 @@ class ProxyContext:
     def outbound_cipher(self):
         return ChaCha20IETFPoly1305(self.outbound_ns.password)
 
-    def create_server_parser(self, inbound_stream):
+    def create_server_parser(self):
         proxy = self.inbound_ns.proxy
         if proxy == "socks5":
             ns = self.inbound_ns
@@ -169,18 +169,27 @@ class ProxyContext:
                 self.quic_outbound = await self.stack.enter_async_context(
                     quic_outbound_acm
                 )
+                print('create outbound')
                 await self.quic_outbound.wait_connected()
-        outbound_stream = self.quic_outbound.create_stream(target_addr)
+            outbound_stream = self.quic_outbound.create_stream(target_addr)
         self.create_outbound_proxy(outbound_stream, source_addr)
         return outbound_stream
 
     async def run_proxy(self, inbound_stream):
-        outbound_stream = await inbound_stream.parser.server(inbound_stream)
-        if app.settings.verbose > 0:
-            print(inbound_stream, "->", outbound_stream)
-        await outbound_stream.parser.init_client(outbound_stream.target_addr)
-        inbound_stream.parser.relay(outbound_stream.parser)
-        outbound_stream.parser.relay(inbound_stream.parser)
+        try:
+            outbound_stream = await inbound_stream.parser.server(inbound_stream)
+            if app.settings.verbose > 0:
+                print("%-50s" % inbound_stream, "->", outbound_stream)
+            try:
+                await outbound_stream.parser.init_client(outbound_stream.target_addr)
+            except Exception:
+                # outbound_stream.transport.close()
+                raise
+            inbound_stream.parser.relay(outbound_stream.parser)
+            outbound_stream.parser.relay(inbound_stream.parser)
+        except Exception:
+            # inbound_stream.transport.close()
+            raise
 
     def get_task_callback(self, info="error"):
         def task_callback(task):

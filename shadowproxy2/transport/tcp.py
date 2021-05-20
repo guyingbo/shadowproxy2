@@ -1,15 +1,27 @@
 import asyncio
 
 from .. import app
-from .base import InboundBase, OutboundBase
 
 
-class TCPInbound(asyncio.Protocol, InboundBase):
+class TCPInbound(asyncio.Protocol):
     def __init__(self, ctx):
         self.ctx = ctx
-        self.parser = ctx.create_server_parser(self)
+        self.parser = ctx.create_server_parser()
         self.task = asyncio.create_task(ctx.run_proxy(self))
         self.task.add_done_callback(ctx.get_task_callback(repr(self)))
+
+    def __repr__(self):
+        if hasattr(self, "transport"):
+            peername = self.transport.get_extra_info("peername")
+            sockname = self.transport.get_extra_info("sockname")
+            peer = f"{peername[0]}:{peername[1]}"
+            sock = f"{sockname[0]}:{sockname[1]}"
+        else:
+            peer = sock = ""
+        return f"{self.__class__.__name__}({peer} -> {sock})"
+
+    def __str__(self):
+        return repr(self)
 
     def connection_made(self, transport):
         self.transport = transport
@@ -30,10 +42,25 @@ class TCPInbound(asyncio.Protocol, InboundBase):
         self.parser.push_eof()
 
 
-class TCPOutbound(asyncio.Protocol, OutboundBase):
+class TCPOutbound(asyncio.Protocol):
     def __init__(self, ctx, target_addr):
         self.ctx = ctx
         self.target_addr = target_addr
+
+    def __repr__(self):
+        if hasattr(self, "transport"):
+            peername = self.transport.get_extra_info("peername")
+            sockname = self.transport.get_extra_info("sockname")
+            peer = f"{peername[0]}:{peername[1]}"
+            sock = f"{sockname[0]}:{sockname[1]}"
+            if peername != self.target_addr:
+                peer += f"({self.target_addr[0]}:{self.target_addr[1]})"
+        else:
+            peer = sock = ""
+        return f"{self.__class__.__name__}({sock} -> {peer})"
+
+    def __str__(self):
+        return repr(self)
 
     def connection_made(self, transport):
         self.transport = transport
