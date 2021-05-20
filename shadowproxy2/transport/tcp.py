@@ -9,8 +9,6 @@ class TCPInbound(asyncio.Protocol):
     def __init__(self, ctx):
         self.ctx = ctx
         self.parser = ctx.create_server_parser()
-        self.task = asyncio.create_task(ctx.run_proxy(self))
-        self.task.add_done_callback(ctx.get_task_callback(repr(self)))
 
     def __repr__(self):
         if hasattr(self, "transport"):
@@ -29,9 +27,10 @@ class TCPInbound(asyncio.Protocol):
         self.transport = transport
         self.source_addr = transport.get_extra_info("peername")
         self.parser.set_transport(transport)
+        self.task = asyncio.create_task(self.ctx.run_proxy(self))
+        self.task.add_done_callback(self.ctx.get_task_callback(repr(self)))
 
     def connection_lost(self, exc):
-        # self.task.cancel()
         if exc is not None and app.settings.verbose > 0:
             click.secho(f"{self} connection lost: {exc}", fg="yellow")
         self.parser.close()
@@ -48,6 +47,7 @@ class TCPOutbound(asyncio.Protocol):
     def __init__(self, ctx, target_addr):
         self.ctx = ctx
         self.target_addr = target_addr
+        self._waiter = asyncio.Future()
 
     def __repr__(self):
         if hasattr(self, "transport"):
@@ -64,10 +64,14 @@ class TCPOutbound(asyncio.Protocol):
     def __str__(self):
         return repr(self)
 
+    async def wait_connected(self):
+        return await self._waiter
+
     def connection_made(self, transport):
         self.transport = transport
         self.parser = self.ctx.create_client_parser()
         self.parser.set_transport(transport)
+        self._waiter.set_result(None)
 
     def connection_lost(self, exc):
         if exc is not None and app.settings.verbose > 0:

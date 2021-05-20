@@ -149,6 +149,7 @@ class ProxyContext:
                 if i == 0:
                     raise
             else:
+                await outbound_proxy.wait_connected()
                 break
         return getattr(outbound_proxy, "protocol", outbound_proxy)
 

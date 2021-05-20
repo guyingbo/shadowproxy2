@@ -55,7 +55,7 @@ class Socks4Parser(NullParser):
         outbound_stream = await inbound_stream.ctx.create_client(
             addr, inbound_stream.source_addr
         )
-        self.transport.write(Response(..., Rep(0), 0, "0.0.0.0").binary)
+        self.transport.write(Response(..., Rep(0x5A), 0, "0.0.0.0").binary)
         return outbound_stream
 
     async def init_client(self, target_addr):
