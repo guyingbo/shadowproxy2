@@ -154,11 +154,11 @@ class AioBuffer:
             self._next(*self._args)
 
     def push_eof(self):
-        if self._waiter is not None:
+        if self._waiter is not None and not self._waiter.done():
             self._waiter.set_exception(EOFError())
 
     def close(self):
-        if self._waiter is not None:
+        if self._waiter is not None and not self._waiter.done():
             self._waiter.set_exception(ConnectionError("closed"))
 
     def read_all(self):
