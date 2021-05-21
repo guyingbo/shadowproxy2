@@ -11,23 +11,24 @@ class TCPInbound(asyncio.Protocol):
         self.parser = ctx.create_server_parser()
 
     def __repr__(self):
+        peer = sock = ""
         if hasattr(self, "transport"):
             peername = self.transport.get_extra_info("peername")
             sockname = self.transport.get_extra_info("sockname")
-            peer = f"{peername[0]}:{peername[1]}"
-            sock = f"{sockname[0]}:{sockname[1]}"
-        else:
-            peer = sock = ""
+            if peername:
+                peer = f"{peername[0]}:{peername[1]}"
+            if sockname:
+                sock = f"{sockname[0]}:{sockname[1]}"
         return f"{self.__class__.__name__}({peer} -> {sock})"
 
     def __str__(self):
         return repr(self)
 
     def pause_writing(self):
-        print(self, "pause_writing")
+        self.parser.pause_writing()
 
     def resume_writing(self):
-        print(self, "resume_writing")
+        self.parser.resume_writing()
 
     def connection_made(self, transport):
         self.transport = transport
@@ -55,25 +56,26 @@ class TCPOutbound(asyncio.Protocol):
         self._waiter = asyncio.Future()
 
     def __repr__(self):
+        peer = sock = ""
         if hasattr(self, "transport"):
             peername = self.transport.get_extra_info("peername")
             sockname = self.transport.get_extra_info("sockname")
-            peer = f"{peername[0]}:{peername[1]}"
-            sock = f"{sockname[0]}:{sockname[1]}"
+            if peername:
+                peer = f"{peername[0]}:{peername[1]}"
+            if sockname:
+                sock = f"{sockname[0]}:{sockname[1]}"
             if peername != self.target_addr:
                 peer += f"({self.target_addr[0]}:{self.target_addr[1]})"
-        else:
-            peer = sock = ""
         return f"{self.__class__.__name__}({sock} -> {peer})"
 
     def __str__(self):
         return repr(self)
 
     def pause_writing(self):
-        print(self, "pause_writing")
+        self.parser.pause_writing()
 
     def resume_writing(self):
-        print(self, "resume_writing")
+        self.parser.resume_writing()
 
     async def wait_connected(self):
         return await self._waiter

@@ -20,6 +20,9 @@ class NullParser:
             self.push = peer_parser.write
         self.push_eof = peer_parser.write_eof
         self.close = peer_parser.transport.close
+        if hasattr(peer_parser.transport, "pause_reading"):
+            self.pause_writing = peer_parser.transport.pause_reading
+            self.resume_writing = peer_parser.transport.resume_reading
 
     def push(self, data):
         if hasattr(self, "buffer"):
@@ -35,3 +38,11 @@ class NullParser:
 
     async def init_client(self, target_addr):
         return
+
+    def pause_writing(self):
+        if hasattr(self, "peer_parser"):
+            self.peer_parser.transport.pause_reading()
+
+    def resume_writing(self):
+        if hasattr(self, "peer_parser"):
+            self.peer_parser.transport.resume_reading()
