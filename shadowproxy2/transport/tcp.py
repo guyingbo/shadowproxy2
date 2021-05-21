@@ -23,6 +23,12 @@ class TCPInbound(asyncio.Protocol):
     def __str__(self):
         return repr(self)
 
+    def pause_writing(self):
+        print(self, "pause_writing")
+
+    def resume_writing(self):
+        print(self, "resume_writing")
+
     def connection_made(self, transport):
         self.transport = transport
         self.source_addr = transport.get_extra_info("peername")
@@ -34,7 +40,6 @@ class TCPInbound(asyncio.Protocol):
         if exc is not None and app.settings.verbose > 0:
             click.secho(f"{self} connection lost: {exc}", fg="yellow")
         self.parser.close()
-        self.transport.close()
 
     def data_received(self, data):
         self.parser.push(data)
@@ -64,6 +69,12 @@ class TCPOutbound(asyncio.Protocol):
     def __str__(self):
         return repr(self)
 
+    def pause_writing(self):
+        print(self, "pause_writing")
+
+    def resume_writing(self):
+        print(self, "resume_writing")
+
     async def wait_connected(self):
         return await self._waiter
 
@@ -77,7 +88,6 @@ class TCPOutbound(asyncio.Protocol):
         if exc is not None and app.settings.verbose > 0:
             click.secho(f"{self} connection lost: {exc}", fg="yellow")
         self.parser.close()
-        self.transport.close()
 
     def data_received(self, data):
         self.parser.push(data)

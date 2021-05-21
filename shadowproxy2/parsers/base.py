@@ -1,13 +1,16 @@
 class NullParser:
     def set_transport(self, transport):
         self.transport = transport
-        if self.transport.can_write_eof():
-            self.write_eof = self.transport.write_eof
 
     def write(self, data):
         self.transport.write(data)
 
+    def write_eof(self):
+        if hasattr(self.transport, "is_closing") and not self.transport.is_closing():
+            self.transport.write_eof()
+
     def relay(self, peer_parser):
+        self.peer_parser = peer_parser
         if hasattr(self, "buffer"):
             data = self.buffer.read_all()
             if data:

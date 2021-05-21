@@ -184,12 +184,12 @@ class ProxyContext:
             try:
                 await outbound_stream.parser.init_client(outbound_stream.target_addr)
             except Exception:
-                # outbound_stream.transport.close()
+                outbound_stream.transport.close()
                 raise
             inbound_stream.parser.relay(outbound_stream.parser)
             outbound_stream.parser.relay(inbound_stream.parser)
         except Exception:
-            # inbound_stream.transport.close()
+            inbound_stream.transport.close()
             raise
 
     def get_task_callback(self, info="error"):

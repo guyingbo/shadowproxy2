@@ -1,3 +1,5 @@
+import click
+
 from ..aiobuffer.buffer import AioBuffer
 from ..aiobuffer.socks5 import Addr
 from .base import NullParser
@@ -32,10 +34,15 @@ class AEADParser(NullParser):
     def push(self, data):
         self._cipher_buf.extend(data)
         while True:
-            plaintext = self._reader.send(None)
-            if plaintext is not None:
-                self.buffer.push(plaintext)
-            return
+            try:
+                plaintext = self._reader.send(None)
+            except Exception as e:
+                click.secho(f"=={e}", fg="red")
+                self.transport.close()
+                return
+            if plaintext is None:
+                return
+            self.buffer.push(plaintext)
 
     async def server(self, inbound_stream):
         addr = await self.buffer.pull(Addr)

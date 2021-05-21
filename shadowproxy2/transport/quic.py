@@ -1,7 +1,8 @@
 import asyncio
-import click
+import traceback
 from functools import cache
 
+import click
 from aioquic.asyncio import QuicConnectionProtocol
 from aioquic.quic.events import ConnectionTerminated, StreamDataReceived
 
@@ -61,6 +62,7 @@ class QuicStream:
     def eof_received(self):
         try:
             self.parser.push_eof()
+            # self.parser.close()
         except Exception as e:
             click.secho(f"{self}: {e}", fg="red")
 
@@ -69,6 +71,7 @@ class QuicStream:
 
     def close(self):
         pass
+        # self.write_eof()
 
 
 class QuicInboundStream(QuicStream):
