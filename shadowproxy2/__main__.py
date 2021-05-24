@@ -98,6 +98,7 @@ def main(
         resource.setrlimit(resource.RLIMIT_NOFILE, (50000, 50000))
     except Exception:
         pass
+    uvloop.install()
     app.settings = app.Settings(
         cert_chain=cert_chain,
         key_file=key_file,
@@ -112,7 +113,6 @@ def main(
         )
         for inbound_ns in inbound_list
     ]
-    uvloop.install()
     asyncio.run(run_server(ctx_list))
 
 

@@ -24,8 +24,11 @@ class ProxyContext:
         self.inbound_ns = inbound_ns
         self.outbound_ns = outbound_ns
         self.quic_outbound = None
-        self.quic_client_lock = asyncio.Lock()
         self.throttles = {}
+
+    @cached_property
+    def quic_client_lock(self):
+        return asyncio.Lock()
 
     @cached_property
     def inbound_cipher(self):
