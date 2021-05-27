@@ -10,6 +10,7 @@ class TransportEnum(Enum):
     quic = "quic"
     udp = "udp"
     tls = "tls"
+    ws = "ws"
 
 
 @unique

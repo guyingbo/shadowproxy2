@@ -44,6 +44,7 @@ setup(
         "aioquic",
         "parsimonious",
         "uvloop",
+        "websockets",
     ],
     entry_points={"console_scripts": ["shadowproxy = shadowproxy2.__main__:main"]},
     classifiers=[

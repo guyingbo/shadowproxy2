@@ -9,7 +9,7 @@ from .models import BoundNamespace
 grammar = r"""
 url         = (transport "+")? proxy "://" (username ":" password "@")? host? ":" port
               ("#" pair ("," pair)* )?
-transport   = "tcp" / "kcp" / "quic" / "udp" / "tls"
+transport   = "tcp" / "kcp" / "quic" / "udp" / "tls" / "ws"
 proxy       = "ss" / "socks5" / "socks4" / "http" / "tunnel" / "red"
 host        = ipv4 / fqdn / ipv6repr
 ipv4        = ~r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}"
