@@ -32,7 +32,7 @@ class TCPInbound(asyncio.Protocol):
 
     def connection_made(self, transport):
         self.transport = transport
-        self.source_addr = transport.get_extra_info("peername")
+        self.parser.source_addr = transport.get_extra_info("peername")
         self.parser.set_transport(transport)
         self.task = asyncio.create_task(self.ctx.run_proxy(self))
         self.task.add_done_callback(self.ctx.get_task_callback(repr(self)))

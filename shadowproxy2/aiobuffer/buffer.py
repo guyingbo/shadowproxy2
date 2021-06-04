@@ -1,13 +1,13 @@
 import abc
 import asyncio
 import enum
-from contextvars import ContextVar
+import types
+from asyncio import exceptions
 from collections import deque
 from struct import Struct, pack
 from typing import Any, Callable, Dict, List, Mapping, Optional, Type, Union
 
 _parent_stack: deque["BinarySchema"] = deque()
-straightway = ContextVar("straightway", default=False)
 
 
 class Unit(abc.ABC):
@@ -134,139 +134,193 @@ class MemberDescriptor:
         obj.member_set(self.key, value, binary)
 
 
-class AioBuffer:
-    def __init__(self, data: Optional[bytearray] = None):
-        self._buf = data or bytearray()
-        self._next = None
-        self._args = ()
-        self._waiter = None
-        self._mapping_stack: deque = deque()
+# class AioBuffer:
+#     def __init__(self, data: Optional[bytearray] = None):
+#         self._buf = data or bytearray()
+#         self._next = None
+#         self._args = ()
+#         self._waiter = None
+#         self._mapping_stack: deque = deque()
+#
+#     def __len__(self):
+#         return len(self._buf)
+#
+#     def __repr__(self):
+#         return f"AioBuffer<{self._buf}>"
+#
+#     def push(self, data):
+#         self._buf.extend(data)
+#         if self._next is not None:
+#             self._next(*self._args)
+#
+#     def push_eof(self):
+#         if self._waiter is not None and not self._waiter.done():
+#             self._waiter.set_exception(EOFError())
+#
+#     def close(self):
+#         if self._waiter is not None and not self._waiter.done():
+#             self._waiter.set_exception(ConnectionError("closed"))
+#
+#     def read_all(self):
+#         r = bytes(self._buf)
+#         del self._buf[:]
+#         return r
+#
+#     def _peek(self, nbytes):
+#         if len(self._buf) < nbytes:
+#             return
+#         result = self._buf[:nbytes]
+#         self._next = None
+#         if self._waiter is None:
+#             return result
+#         self._waiter.set_result(result)
+#
+#     def _read_all(self):
+#         if not self._buf:
+#             return
+#         r = self._buf[:]
+#         del self._buf[:]
+#         return r
+#
+#     def _read_exactly(self, nbytes: int) -> Optional[bytearray]:
+#         if len(self._buf) < nbytes:
+#             return
+#         result = self._buf[:nbytes]
+#         del self._buf[:nbytes]
+#         self._next = None
+#         if self._waiter is None:
+#             return result
+#         self._waiter.set_result(result)
+#
+#     def _read_struct(self, struct: Struct):
+#         size = struct.size
+#         if len(self._buf) < size:
+#             return
+#         result = struct.unpack_from(self._buf)
+#         del self._buf[:size]
+#         self._next = None
+#         if self._waiter is None:
+#             return result
+#         self._waiter.set_result(result)
+#
+#     def _read_until(self, data, return_tail: bool) -> Optional[bytearray]:
+#         index = self._buf.find(data)
+#         if index == -1:
+#             return
+#         end = index + len(data)
+#         result = self._buf[: end if return_tail else index]
+#         del self._buf[:end]
+#         self._next = None
+#         if self._waiter is None:
+#             return result
+#         self._waiter.set_result(result)
+#
+#     async def pull(self, obj: Union[int, Struct, str, Unit, Type[BinarySchema]]):
+#         if isinstance(obj, int):
+#             if obj > 0:
+#                 self._next = self._read_exactly
+#                 self._args = (obj,)
+#             else:
+#                 self._next = self._read_all
+#                 self._args = ()
+#         elif isinstance(obj, Struct):
+#             self._next = self._read_struct
+#             self._args = (obj,)
+#         elif isinstance(obj, str):
+#             self._next = self._read_struct
+#             self._args = (Struct(obj),)
+#         elif isinstance(obj, (Unit, BinarySchemaMetaclass)):
+#             return await obj.get_value(self)
+#         else:
+#             raise TypeError(f"unknown object type: {type(obj)}")
+#         res = self._next(*self._args)
+#         if res is None:
+#             self._waiter = asyncio.Future()
+#             try:
+#                 res = await self._waiter
+#             finally:
+#                 self._waiter = None
+#         return res
+#
+#     async def pull_until(self, data, *, return_tail: bool = True):
+#         self._next = self._read_until
+#         self._args = (data, return_tail)
+#         res = self._next(*self._args)
+#         if res is None:
+#             self._waiter = asyncio.Future()
+#             try:
+#                 res = await self._waiter
+#             finally:
+#                 self._waiter = None
+#         return res
+#
+#     async def peek(self, nbytes: int):
+#         self._next = self._peek
+#         self._args = (nbytes,)
+#         res = self._next(*self.args)
+#         if res is None:
+#             self._waiter = asyncio.Future()
+#             try:
+#                 res = await self._waiter
+#             finally:
+#                 self._waiter = None
+#         return res
 
-    def __len__(self):
-        return len(self._buf)
 
-    def __repr__(self):
-        return f"AioBuffer<{self._buf}>"
-
-    def push(self, data):
-        self._buf.extend(data)
-        if self._next is not None:
-            self._next(*self._args)
-
-    def push_eof(self):
-        if self._waiter is not None and not self._waiter.done():
-            self._waiter.set_exception(EOFError())
-
-    def close(self):
-        if self._waiter is not None and not self._waiter.done():
-            self._waiter.set_exception(ConnectionError("closed"))
-
-    def read_all(self):
-        r = bytes(self._buf)
-        del self._buf[:]
-        return r
-
-    def _peek(self, nbytes):
-        if len(self._buf) < nbytes:
-            return
-        result = self._buf[:nbytes]
-        self._next = None
-        if self._waiter is None:
-            return result
-        self._waiter.set_result(result)
-
-    def _read_all(self):
-        if not self._buf:
-            return
-        r = self._buf[:]
-        del self._buf[:]
-        return r
-
-    def _read_exactly(self, nbytes: int) -> Optional[bytearray]:
-        if len(self._buf) < nbytes:
-            return
-        result = self._buf[:nbytes]
-        del self._buf[:nbytes]
-        self._next = None
-        if self._waiter is None:
-            return result
-        self._waiter.set_result(result)
-
-    def _read_struct(self, struct: Struct):
-        size = struct.size
-        if len(self._buf) < size:
-            return
-        result = struct.unpack_from(self._buf)
-        del self._buf[:size]
-        self._next = None
-        if self._waiter is None:
-            return result
-        self._waiter.set_result(result)
-
-    def _read_until(self, data, return_tail: bool) -> Optional[bytearray]:
-        index = self._buf.find(data)
-        if index == -1:
-            return
-        end = index + len(data)
-        result = self._buf[: end if return_tail else index]
-        del self._buf[:end]
-        self._next = None
-        if self._waiter is None:
-            return result
-        self._waiter.set_result(result)
-
-    async def pull(self, obj: Union[int, Struct, str, Unit, Type[BinarySchema]]):
-        if isinstance(obj, int):
-            if obj > 0:
-                self._next = self._read_exactly
-                self._args = (obj,)
-            else:
-                self._next = self._read_all
-                self._args = ()
-        elif isinstance(obj, Struct):
-            self._next = self._read_struct
-            self._args = (obj,)
-        elif isinstance(obj, str):
-            self._next = self._read_struct
-            self._args = (Struct(obj),)
-        elif isinstance(obj, (Unit, BinarySchemaMetaclass)):
-            return await obj.get_value(self)
+async def _pull(self, obj):
+    if isinstance(obj, int):
+        if obj > 0:
+            return await self.readexactly(obj)
         else:
-            raise TypeError(f"unknown object type: {type(obj)}")
-        res = self._next(*self._args)
-        if res is None:
-            if straightway.get():
-                raise ValueError("pull failed")
-            self._waiter = asyncio.Future()
-            try:
-                res = await self._waiter
-            finally:
-                self._waiter = None
-        return res
+            return await self.read(self._limit)
+    elif isinstance(obj, Struct):
+        size = obj.size
+        data = await self.readexactly(size)
+        return obj.unpack(data)
+    elif isinstance(obj, str):
+        return await self.pull(Struct(obj))
+    elif isinstance(obj, (Unit, BinarySchemaMetaclass)):
+        return await obj.get_value(self)
+    else:
+        raise TypeError(f"unknown object type: {type(obj)}")
 
-    async def pull_until(self, data, *, return_tail: bool = True):
-        self._next = self._read_until
-        self._args = (data, return_tail)
-        res = self._next(*self._args)
-        if res is None:
-            self._waiter = asyncio.Future()
-            try:
-                res = await self._waiter
-            finally:
-                self._waiter = None
-        return res
 
-    async def peek(self, nbytes: int):
-        self._next = self._peek
-        self._args = (nbytes,)
-        res = self._next(*self.args)
-        if res is None:
-            self._waiter = asyncio.Future()
-            try:
-                res = await self._waiter
-            finally:
-                self._waiter = None
-        return res
+async def _pull_until(self, data, *, return_tail=False):
+    data = await self.readuntil(data)
+    if return_tail:
+        return data
+    return data[: -len(data)]
+
+
+async def _peek(self, n):
+    if n <= 0:
+        raise ValueError("peek size can not be less than zero")
+
+    if self._exception is not None:
+        raise self._exception
+
+    while len(self._buffer) < n:
+        if self._eof:
+            incomplete = bytes(self._buffer)
+            raise exceptions.IncompleteReadError(incomplete, n)
+
+        await self._wait_for_data("peek")
+
+    if len(self._buffer) == n:
+        data = bytes(self._buffer)
+    else:
+        data = bytes(self._buffer[:n])
+    self._maybe_resume_transport()
+    return data
+
+
+def create_buffer(reader: asyncio.StreamReader = None):
+    reader = reader or asyncio.StreamReader()
+    reader._mapping_stack = []
+    reader.pull = types.MethodType(_pull, reader)
+    reader.pull_until = types.MethodType(_pull_until, reader)
+    reader.peek = types.MethodType(_peek, reader)
+    return reader
 
 
 class SingleStructUnit(Unit):
@@ -486,12 +540,9 @@ class LengthPrefixedObject(Unit):
     async def get_value(self, buffer):
         length = await self.length_unit.get_value(buffer)
         data = await buffer.pull(length)
-        temp_buffer = AioBuffer(data)
-        token = straightway.set(True)
-        try:
-            obj = await self.object_unit.get_value(temp_buffer)
-        finally:
-            straightway.reset(token)
+        temp_buffer = create_buffer()
+        temp_buffer.feed_data(data)
+        obj = await self.object_unit.get_value(temp_buffer)
         if len(temp_buffer) > 0:
             raise ValueError("extra bytes left")
         return obj
@@ -509,14 +560,11 @@ class LengthPrefixedObjectList(LengthPrefixedObject):
     async def get_value(self, buffer):
         length = await self.length_unit.get_value(buffer)
         data = await buffer.pull(length)
-        temp_buffer = AioBuffer(data)
+        temp_buffer = create_buffer()
+        temp_buffer.feed_data(data)
         lst = []
-        token = straightway.set(True)
-        try:
-            while len(temp_buffer) > 0:
-                lst.append(await self.object_unit.get_value(temp_buffer))
-        finally:
-            straightway.reset(token)
+        while len(temp_buffer._buffer) > 0:
+            lst.append(await self.object_unit.get_value(temp_buffer))
         return lst
 
     def __call__(self, obj_list: List[FieldType]) -> bytes:

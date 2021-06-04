@@ -1,20 +1,45 @@
 import asyncio
-import click
 import contextlib
 import ssl
 import traceback
-from functools import cached_property, partial
+from contextvars import ContextVar
+from functools import cached_property  # , partial
 
+import click
+import websockets
 from aioquic import asyncio as aio
+from aioquic.asyncio.protocol import QuicStreamAdapter
 from aioquic.quic.configuration import QuicConfiguration
 
 from . import app
 from .ciphers import ChaCha20IETFPoly1305
-from .parsers import aead, socks4, socks5, http
+from .parsers import aead, http, socks4, socks5
 from .parsers.base import NullParser
 from .throttle import ProtocolProxy, Throttle
-from .transport.quic import QuicInbound, QuicOutbound
-from .transport.tcp import TCPInbound, TCPOutbound
+
+from .transport.ws import WebsocketWriter, wait_recv
+
+QuicStreamAdapter.close = lambda self: None
+QuicStreamAdapter.get_extra_info = (
+    lambda self, name, default=None: self.protocol._transport.get_extra_info(name)
+)
+source_addr_var = ContextVar("source_addr", default=("", 0))
+inbound_addr_var = ContextVar("inbound_addr", default=("", 0))
+outbound_addr_var = ContextVar("outbound_addr", default=("", 0))
+remote_addr_var = ContextVar("remote_addr", default=("", 0))
+target_addr_var = ContextVar("target_addr", default=("", 0))
+
+
+@contextlib.asynccontextmanager
+async def aclosing(writer):
+    try:
+        yield writer
+    finally:
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except (AttributeError, NotImplementedError):
+            pass
 
 
 class ProxyContext:
@@ -76,10 +101,10 @@ class ProxyContext:
             return ProtocolProxy(inbound, throttle)
         return inbound
 
-    def create_outbound_proxy(self, outbound, source_addr):
+    def create_outbound_proxy(self, outbound):
         if self.inbound_ns.dl:
             throttle = self.throttles.setdefault(
-                source_addr[0], Throttle(self.inbound_ns.dl * 1024)
+                source_addr_var.get()[0], Throttle(self.inbound_ns.dl * 1024)
             )
             return ProtocolProxy(outbound, throttle)
         return outbound
@@ -87,17 +112,16 @@ class ProxyContext:
     async def create_server(self):
         return await getattr(self, f"create_{self.inbound_ns.transport}_server")()
 
-    async def create_tcp_server(self, tls=False):
-        if tls:
-            sslcontext = ssl.create_default_context()
+    async def create_tcp_server(self):
+        if self.inbound_ns.transport == "tls":
+            sslcontext = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
             sslcontext.load_cert_chain(
                 str(app.settings.cert_chain), str(app.settings.key_file)
             )
         else:
             sslcontext = None
-        loop = asyncio.get_running_loop()
-        server = await loop.create_server(
-            lambda: self.create_inbound_proxy(TCPInbound(self)),
+        server = await asyncio.start_server(
+            self.tcp_handler,
             self.inbound_ns.host,
             self.inbound_ns.port,
             reuse_port=True,
@@ -105,8 +129,48 @@ class ProxyContext:
         )
         return await self.stack.enter_async_context(server)
 
-    async def create_tls_server(self):
-        return await self.create_tcp_server(tls=True)
+    create_tls_server = create_tcp_server
+
+    async def tcp_handler(self, reader, writer):
+        source_addr_var.set(writer.get_extra_info("peername"))
+        inbound_addr_var.set(writer.get_extra_info("sockname"))
+        parser = self.create_server_parser()
+        parser.set_rw(reader, writer)
+        remote_parser = await parser.server(self)
+        self.create_task(parser.relay(remote_parser))
+        self.create_task(remote_parser.relay(parser))
+
+    async def ws_handler(self, ws, path):
+        source_addr_var.set(ws.remote_address)
+        inbound_addr_var.set(ws.local_address)
+        parser = self.create_server_parser()
+        parser.set_rw(None, WebsocketWriter(ws))
+        task = self.create_task(wait_recv(ws, parser.reader))
+        remote_parser = await parser.server(self)
+        self.create_task(parser.relay(remote_parser))
+        self.create_task(remote_parser.relay(parser))
+        await task
+        await ws.close()
+
+    async def create_ws_server(self):
+        if self.inbound_ns.transport == "wss":
+            sslcontext = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            sslcontext.load_cert_chain(
+                str(app.settings.cert_chain), str(app.settings.key_file)
+            )
+        else:
+            sslcontext = None
+
+        server = websockets.serve(
+            self.ws_handler,
+            self.inbound_ns.host,
+            self.inbound_ns.port,
+            # create_protocol=WSInbound,
+            ssl=sslcontext,
+        )
+        return await self.stack.enter_async_context(server)
+
+    create_wss_server = create_ws_server
 
     async def create_quic_server(self):
         configuration = QuicConfiguration(is_client=False)
@@ -118,20 +182,42 @@ class ProxyContext:
             self.inbound_ns.host,
             self.inbound_ns.port,
             configuration=configuration,
-            create_protocol=partial(
-                QuicInbound,
-                ctx=self,
-            ),
+            stream_handler=lambda r, w: self.create_task(self.tcp_handler(r, w)),
         )
 
-    async def create_client(self, target_addr, source_addr):
+    async def create_client(self, target_addr):
+        target_addr_var.set(target_addr)
         if self.outbound_ns is None:
-            return await self.create_tcp_client(target_addr, source_addr)
-        func = getattr(self, f"create_{self.outbound_ns.transport}_client")
-        return await func(target_addr, source_addr)
+            transport = "tcp"
+        else:
+            transport = self.outbound_ns.transport
+        func = getattr(self, f"create_{transport}_client")
+        reader, writer = await func(target_addr)
+        if not isinstance(writer, WebsocketWriter):
+            remote_addr_var.set(writer.get_extra_info("peername"))
+            outbound_addr_var.set(writer.get_extra_info("sockname"))
+        parser = self.create_client_parser()
+        parser.set_rw(reader, writer)
+        parser.target_addr = target_addr
+        if app.settings.verbose > 0:
+            print(self.get_route())
+        return parser
 
-    async def create_tcp_client(self, target_addr, source_addr):
-        loop = asyncio.get_running_loop()
+    def get_route(self):
+        s = source_addr_var.get() or ("", 0)
+        i = inbound_addr_var.get() or ("", 0)
+        o = outbound_addr_var.get() or ("", 0)
+        r = remote_addr_var.get() or ("", 0)
+        t = target_addr_var.get() or ("", 0)
+        return (
+            f"{s[0]}:{s[1]} -> {i[0]}:{i[1]} -> "
+            f"{o[0]}:{o[1]} -> {r[0]}:{r[1]}({t[0]}:{t[1]})"
+        )
+
+    async def create_tcp_client(self, target_addr):
+        ssl = None
+        if self.outbound_ns and self.outbound_ns.transport == "tls":
+            ssl = True
         if self.outbound_ns:
             host = self.outbound_ns.host
             port = self.outbound_ns.port
@@ -139,24 +225,44 @@ class ProxyContext:
             host, port = target_addr
         for i in range(1, -1, -1):
             try:
-                _, outbound_proxy = await loop.create_connection(
-                    lambda: self.create_outbound_proxy(
-                        TCPOutbound(self, target_addr), source_addr
-                    ),
+                return await asyncio.open_connection(
                     host,
                     port,
+                    ssl=ssl,
                 )
             except OSError as e:
                 if app.settings.verbose > 1:
                     click.secho(f"{e} retrying...")
                 if i == 0:
                     raise
-            else:
-                await outbound_proxy.wait_connected()
-                break
-        return getattr(outbound_proxy, "protocol", outbound_proxy)
 
-    async def create_quic_client(self, target_addr, source_addr):
+    create_tls_client = create_tcp_client
+
+    async def create_ws_client(self, target_addr):
+        transport = self.outbound_ns.transport
+        host = self.outbound_ns.host
+        port = self.outbound_ns.port
+        path = self.outbound_ns.path or "/ws"
+        uri = f"{transport}://{host}:{port}{path}"
+        for i in range(1, -1, -1):
+            try:
+                ws = await websockets.connect(uri)
+            except OSError as e:
+                if app.settings.verbose > 1:
+                    click.secho(f"{e} retrying...")
+                if i == 0:
+                    raise
+            else:
+                outbound_addr_var.set(ws.local_address)
+                remote_addr_var.set(ws.remote_address)
+                reader = asyncio.StreamReader()
+                writer = WebsocketWriter(ws)
+                self.create_task(wait_recv(ws, reader))
+                return reader, writer
+
+    create_wss_client = create_ws_client
+
+    async def create_quic_client(self, target_addr):
         async with self.quic_client_lock:
             if self.quic_outbound is None:
                 configuration = QuicConfiguration()
@@ -168,44 +274,27 @@ class ProxyContext:
                 quic_outbound_acm = aio.connect(
                     self.outbound_ns.host,
                     self.outbound_ns.port,
-                    create_protocol=partial(QuicOutbound, ctx=self),
                     configuration=configuration,
                 )
                 self.quic_outbound = await self.stack.enter_async_context(
                     quic_outbound_acm
                 )
                 await self.quic_outbound.wait_connected()
-            outbound_stream = self.quic_outbound.create_stream(target_addr)
-        self.create_outbound_proxy(outbound_stream, source_addr)
-        return outbound_stream
+            return await self.quic_outbound.create_stream()
 
-    async def run_proxy(self, inbound_stream):
+    def task_callback(self, task):
         try:
-            outbound_stream = await inbound_stream.parser.server(inbound_stream)
+            exc = task.exception()
+        except asyncio.CancelledError as e:
             if app.settings.verbose > 0:
-                print("%-50s" % inbound_stream, "->", outbound_stream)
-            try:
-                await outbound_stream.parser.init_client(outbound_stream.target_addr)
-            except Exception:
-                outbound_stream.transport.close()
-                raise
-            inbound_stream.parser.relay(outbound_stream.parser)
-            outbound_stream.parser.relay(inbound_stream.parser)
-        except Exception:
-            inbound_stream.transport.close()
-            raise
+                click.secho(f"{e}", fg="yellow")
+            return
+        if exc and app.settings.verbose > 0:
+            click.secho(f"{self.get_route()} {exc}", fg="magenta")
+            if app.settings.verbose > 1:
+                traceback.print_tb(exc.__traceback__)
 
-    def get_task_callback(self, info="error"):
-        def task_callback(task):
-            try:
-                exc = task.exception()
-            except asyncio.CancelledError:
-                if app.settings.verbose > 0:
-                    click.secho(f"{info} cancelled", fg="yellow")
-                return
-            if exc and app.settings.verbose > 0:
-                click.secho(f"{info} : {exc}", fg="magenta")
-                if app.settings.verbose > 1:
-                    traceback.print_tb(exc.__traceback__)
-
-        return task_callback
+    def create_task(self, coro):
+        task = asyncio.create_task(coro)
+        task.add_done_callback(self.task_callback)
+        return task

@@ -3,7 +3,6 @@ import re
 from urllib.parse import urlparse
 
 from ..aiobuffer import buffer as schema
-from ..aiobuffer.buffer import AioBuffer
 from .base import NullParser
 
 HTTP_LINE = re.compile(b"([^ ]+) +(.+?) +(HTTP/[^ ]+)")
@@ -61,24 +60,23 @@ class HTTPParser(NullParser):
     def __init__(self, username: str, password: str):
         self.username = username
         self.password = password
-        self.buffer = AioBuffer()
         if username is None or password is None:
             self.auth = None
         else:
             self.auth = self.username.encode(), self.password.encode()
 
-    async def server(self, inbound_stream):
-        request = await self.buffer.pull(HTTPRequest)
+    async def server(self, ctx):
+        request = await self.reader.pull(HTTPRequest)
         if self.auth:
             pauth = request.headers.get(b"Proxy-Authorization", None)
             httpauth = b"Basic " + base64.b64encode(b":".join(self.auth))
             if httpauth != pauth:
-                self.transport.write(
+                self.writer.write(
                     request.ver + b" 407 Proxy Authentication Required\r\n"
                     b"Connection: close\r\n"
                     b'Proxy-Authenticate: Basic realm="Shadowproxy Auth"\r\n\r\n'
                 )
-                self.transport.close()
+                self.writer.close()
                 raise ProtocolError("Unauthorized HTTP Request")
         if request.method == b"CONNECT":
             host, _, port = request.path.partition(b":")
@@ -88,21 +86,20 @@ class HTTPParser(NullParser):
             url = urlparse(request.path)
             if not url.hostname:
                 error_msg = "hostname is needed"
-                self.transport.write(
+                self.writer.write(
                     b"HTTP/1.1 200 OK\r\n"
                     b"Connection: close\r\n"
                     b"Content-Type: text/plain\r\n"
                     b"Content-Length: 2\r\n\r\n"
                 )
-                self.transport.write(error_msg.encode())
+                self.writer.write(error_msg.encode())
                 raise ProtocolError(error_msg)
             target_addr = (url.hostname.decode(), url.port or 80)
-        outbound_stream = await inbound_stream.ctx.create_client(
-            target_addr, inbound_stream.source_addr
-        )
+        remote_parser = await ctx.create_client(target_addr)
         if request.method == b"CONNECT":
-            self.transport.write(b"HTTP/1.1 200 Connection: Established\r\n\r\n")
-        return outbound_stream
+            self.writer.write(b"HTTP/1.1 200 Connection: Established\r\n\r\n")
+        await remote_parser.init_client(target_addr)
+        return remote_parser
 
     async def init_client(self, target_addr):
         target_host, target_port = target_addr
@@ -118,8 +115,8 @@ class HTTPParser(NullParser):
                 base64.b64encode(b":".join(self.auth)).decode()
             )
         headers_str += "\r\n"
-        self.transport.write(headers_str.encode())
-        response = await self.buffer.pull(HTTPResponse)
+        self.writer.write(headers_str.encode())
+        response = await self.reader.pull(HTTPResponse)
         if response.code != b"200":
             raise ProtocolError(f"bad status code: {response.code} {response.status}")
         return response

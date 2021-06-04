@@ -71,7 +71,8 @@ class AuthMethod(enum.IntEnum):
     no_auth = 0
     gssapi = 1
     user_auth = 2
-    no_acceptable_method = 255
+    private = 0x80
+    no_acceptable_method = 0xFF
 
 
 class Cmd(enum.IntEnum):

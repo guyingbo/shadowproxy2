@@ -1,48 +1,35 @@
+from ..aiobuffer.buffer import create_buffer
+
+
 class NullParser:
-    def set_transport(self, transport):
-        self.transport = transport
-
-    def write(self, data):
-        self.transport.write(data)
-
-    def write_eof(self):
-        if hasattr(self.transport, "is_closing") and not self.transport.is_closing():
-            self.transport.write_eof()
-
-    def relay(self, peer_parser):
-        self.peer_parser = peer_parser
-        if hasattr(self, "buffer"):
-            data = self.buffer.read_all()
-            if data:
-                peer_parser.write(data)
-            self.buffer.push = peer_parser.write
-        else:
-            self.push = peer_parser.write
-        self.push_eof = peer_parser.write_eof
-        self.close = peer_parser.transport.close
-        if hasattr(peer_parser.transport, "pause_reading"):
-            self.pause_writing = peer_parser.transport.pause_reading
-            self.resume_writing = peer_parser.transport.resume_reading
-
-    def push(self, data):
-        if hasattr(self, "buffer"):
-            self.buffer.push(data)
-
-    def push_eof(self):
-        if hasattr(self, "buffer"):
-            self.buffer.push_eof()
-
-    def close(self):
-        if hasattr(self, "buffer"):
-            self.buffer.close()
+    def set_rw(self, reader, writer):
+        self.reader = create_buffer(reader)
+        self.writer = writer
 
     async def init_client(self, target_addr):
         return
 
-    def pause_writing(self):
-        if hasattr(self, "peer_parser"):
-            self.peer_parser.transport.pause_reading()
+    async def relay(self, output_parser):
+        while True:
+            try:
+                data = await self.reader.read(1024)
+            except Exception as e:
+                print(e)
+                data = None
+            if not data:
+                return
+                if (
+                    output_parser.writer.can_write_eof()
+                    and not output_parser.writer.is_closing()
+                ):
+                    output_parser.writer.write_eof()
+                output_parser.writer.close()
+                try:
+                    await output_parser.writer.wait_closed()
+                except Exception as e:
+                    print(e)
+                break
+            output_parser.write(data)
 
-    def resume_writing(self):
-        if hasattr(self, "peer_parser"):
-            self.peer_parser.transport.resume_reading()
+    def write(self, data):
+        return self.writer.write(data)

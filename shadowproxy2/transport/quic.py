@@ -1,5 +1,4 @@
 import asyncio
-import traceback
 from functools import cache
 
 import click
@@ -83,7 +82,7 @@ class QuicInboundStream(QuicStream):
         self.parser.set_transport(self)
         self.task = asyncio.create_task(self.ctx.run_proxy(self))
         self.task.add_done_callback(self.ctx.get_task_callback(repr(self)))
-        self.source_addr = ("", 0)
+        self.parser.source_addr = ("", 0)
 
     @cache
     def __repr__(self):
