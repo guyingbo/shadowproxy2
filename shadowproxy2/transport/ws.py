@@ -20,7 +20,7 @@ class WebsocketWriter:
         return False
 
     def is_closing(self):
-        return self.ws.closed()
+        return self.ws.closed
 
     async def close(self):
         await self.ws.close()

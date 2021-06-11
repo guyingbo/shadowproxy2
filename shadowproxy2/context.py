@@ -3,7 +3,7 @@ import contextlib
 import ssl
 import traceback
 from contextvars import ContextVar
-from functools import cached_property  # , partial
+from functools import cached_property
 
 import click
 import websockets
@@ -15,9 +15,8 @@ from . import app
 from .ciphers import ChaCha20IETFPoly1305
 from .parsers import aead, http, socks4, socks5
 from .parsers.base import NullParser
-from .throttle import ProtocolProxy, Throttle
-
 from .transport.ws import WebsocketWriter, wait_recv
+from .throttle import Throttle
 
 QuicStreamAdapter.close = lambda self: None
 QuicStreamAdapter.get_extra_info = (
@@ -30,18 +29,6 @@ remote_addr_var = ContextVar("remote_addr", default=("", 0))
 target_addr_var = ContextVar("target_addr", default=("", 0))
 
 
-@contextlib.asynccontextmanager
-async def aclosing(writer):
-    try:
-        yield writer
-    finally:
-        try:
-            writer.close()
-            await writer.wait_closed()
-        except (AttributeError, NotImplementedError):
-            pass
-
-
 class ProxyContext:
     stack: contextlib.AsyncExitStack
 
@@ -49,7 +36,6 @@ class ProxyContext:
         self.inbound_ns = inbound_ns
         self.outbound_ns = outbound_ns
         self.quic_outbound = None
-        self.throttles = {}
 
     @cached_property
     def quic_client_lock(self):
@@ -99,20 +85,6 @@ class ProxyContext:
         else:
             raise Exception(f"Unknown proxy type: {proxy}")
 
-    def create_inbound_proxy(self, inbound):
-        if self.inbound_ns.ul:
-            throttle = Throttle(self.inbound_ns.ul * 1024)
-            return ProtocolProxy(inbound, throttle)
-        return inbound
-
-    def create_outbound_proxy(self, outbound):
-        if self.inbound_ns.dl:
-            throttle = self.throttles.setdefault(
-                source_addr_var.get()[0], Throttle(self.inbound_ns.dl * 1024)
-            )
-            return ProtocolProxy(outbound, throttle)
-        return outbound
-
     async def create_server(self):
         return await getattr(self, f"create_{self.inbound_ns.transport}_server")()
 
@@ -135,12 +107,24 @@ class ProxyContext:
 
     create_tls_server = create_tcp_server
 
+    def get_upload_throttle(self):
+        throttle = None
+        if self.inbound_ns.ul:
+            throttle = Throttle(self.inbound_ns.ul * 1024)
+        return throttle
+
+    def get_download_throttle(self):
+        throttle = None
+        if self.inbound_ns.dl:
+            throttle = Throttle(self.inbound_ns.dl * 1024)
+        return throttle
+
     async def tcp_handler(self, reader, writer):
         try:
             source_addr_var.set(writer.get_extra_info("peername"))
             inbound_addr_var.set(writer.get_extra_info("sockname"))
             parser = self.create_server_parser()
-            parser.set_rw(reader, writer)
+            parser.set_rw(reader, writer, self.get_upload_throttle())
             remote_parser = await parser.server(self)
             self.create_task(parser.relay(remote_parser))
             self.create_task(remote_parser.relay(parser))
@@ -154,7 +138,7 @@ class ProxyContext:
             source_addr_var.set(ws.remote_address)
             inbound_addr_var.set(ws.local_address)
             parser = self.create_server_parser()
-            parser.set_rw(None, WebsocketWriter(ws))
+            parser.set_rw(None, WebsocketWriter(ws), self.get_upload_throttle())
             task = self.create_task(wait_recv(ws, parser.reader))
             remote_parser = await parser.server(self)
             self.create_task(parser.relay(remote_parser))
@@ -211,8 +195,7 @@ class ProxyContext:
             remote_addr_var.set(writer.get_extra_info("peername"))
             outbound_addr_var.set(writer.get_extra_info("sockname"))
         parser = self.create_client_parser()
-        parser.set_rw(reader, writer)
-        parser.target_addr = target_addr
+        parser.set_rw(reader, writer, self.get_download_throttle())
         if app.settings.verbose > 0:
             print(self.get_route())
         return parser

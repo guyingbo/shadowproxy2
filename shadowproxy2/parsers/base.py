@@ -1,12 +1,26 @@
+import asyncio
 from inspect import isawaitable
 
 from ..aiobuffer.buffer import create_buffer
 
 
 class NullParser:
-    def set_rw(self, reader, writer):
+    def set_rw(self, reader, writer, throttle=None):
         self.reader = create_buffer(reader)
         self.writer = writer
+        if throttle:
+            self._event = asyncio.Event()
+            self._event.set()
+            self.throttle = throttle
+            self.read_func = self.read
+        else:
+            self.read_func = self.reader.read
+
+    async def read(self, nbytes):
+        await self._event.wait()
+        data = await self.reader.read(nbytes)
+        self.throttle.consume(len(data), self._event)
+        return data
 
     async def init_client(self, target_addr):
         return
@@ -15,9 +29,8 @@ class NullParser:
         try:
             while True:
                 try:
-                    data = await self.reader.read(1024)
-                except Exception as e:
-                    print(e)
+                    data = await self.read_func(4096)
+                except Exception:
                     data = None
                 if not data:
                     if (
