@@ -49,7 +49,7 @@ class Socks4Parser(NullParser):
             addr = (request.dst_ip, request.dst_port)
         assert request.cmd is Cmd.connect
         remote_parser = await ctx.create_client(addr)
-        self.writer.write(Response(..., Rep(0x5A), 0, "0.0.0.0").binary)
+        await self._write(Response(..., Rep(0x5A), 0, "0.0.0.0").binary)
         await remote_parser.init_client(addr)
         return remote_parser
 
@@ -65,7 +65,7 @@ class Socks4Parser(NullParser):
                 ..., Cmd.connect, target_port, "0.0.0.1", b"\x01\x01"
             )
             tail = domain(target_host.encode())
-        self.writer.write(request.binary + tail)
+        await self._write(request.binary + tail)
         response = await self.reader.pull(Response)
         assert response.rep is Rep.granted
         return response

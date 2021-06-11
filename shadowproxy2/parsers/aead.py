@@ -58,19 +58,19 @@ class AEADParser(NullParser):
         target_addr = (addr.host, addr.port)
         remote_parser = await ctx.create_client(target_addr)
         packet, self.encrypt = self.cipher.make_encrypter()
-        self.writer.write(packet)
+        await self._write(packet)
         await remote_parser.init_client(target_addr)
         return remote_parser
 
-    def write(self, data):
+    async def write(self, data):
         packet = self.encrypt(data)
-        self.writer.write(packet)
+        await self._write(packet)
 
     async def init_client(self, target_addr):
         packet, self.encrypt = self.cipher.make_encrypter()
-        self.writer.write(packet)
+        await self._write(packet)
         addr = Addr.from_tuple(target_addr)
-        self.write(addr.binary)
+        await self.write(addr.binary)
 
 
 class PlainParser(NullParser):
@@ -83,4 +83,4 @@ class PlainParser(NullParser):
 
     async def init_client(self, target_addr):
         addr = Addr.from_tuple(target_addr)
-        self.write(addr.binary)
+        await self.write(addr.binary)

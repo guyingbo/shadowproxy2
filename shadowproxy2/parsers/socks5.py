@@ -21,24 +21,22 @@ class Socks5Parser(NullParser):
         addr = socks5.Addr(1, "0.0.0.0", 0)
         if auth:
             if socks5.AuthMethod.user_auth not in handshake.methods:
-                self.writer.write(
+                await self._write(
                     socks5.Reply(..., socks5.Rep.not_allowed, ..., addr).binary
                 )
-                self.writer.close()
                 raise ProtocolError("auth method not allowed")
-            self.writer.write(
+            await self._write(
                 socks5.ServerSelection(..., socks5.AuthMethod.user_auth).binary
             )
             user_auth = await self.reader.pull(socks5.UsernameAuth)
             if (user_auth.username, user_auth.password) != auth:
-                self.writer.write(
+                await self._write(
                     socks5.Reply(..., socks5.Rep.not_allowed, ..., addr).binary
                 )
-                self.writer.close()
                 raise ProtocolError("auth failed")
-            self.writer.write(socks5.UsernameAuthReply(..., ...).binary)
+            await self._write(socks5.UsernameAuthReply(..., ...).binary)
         else:
-            self.writer.write(
+            await self._write(
                 socks5.ServerSelection(..., socks5.AuthMethod.no_auth).binary
             )
         request = await self.reader.pull(socks5.ClientRequest)
@@ -48,7 +46,7 @@ class Socks5Parser(NullParser):
             )
         target_addr = (request.addr.host, request.addr.port)
         remote_parser = await ctx.create_client(target_addr)
-        self.writer.write(socks5.Reply(..., socks5.Rep(0), ..., addr).binary)
+        await self._write(socks5.Reply(..., socks5.Rep(0), ..., addr).binary)
         await remote_parser.init_client(target_addr)
         return remote_parser
 
@@ -57,7 +55,7 @@ class Socks5Parser(NullParser):
             auth = None
         else:
             auth = self.username.encode(), self.password.encode()
-        self.writer.write(
+        await self._write(
             socks5.Handshake(
                 ..., [socks5.AuthMethod.no_auth, socks5.AuthMethod.user_auth]
             ).binary
@@ -67,18 +65,16 @@ class Socks5Parser(NullParser):
             socks5.AuthMethod.no_auth,
             socks5.AuthMethod.user_auth,
         ):
-            self.writer.close()
             raise ProtocolError("no method to choose")
         if auth and (server_selection.method is socks5.AuthMethod.user_auth):
-            self.writer.write(socks5.UsernameAuth(..., *auth).binary)
+            await self._write(socks5.UsernameAuth(..., *auth).binary)
             await self.reader.pull(socks5.UsernameAuthReply)
-        self.writer.write(
+        await self._write(
             socks5.ClientRequest(
                 ..., socks5.Cmd.connect, ..., socks5.Addr.from_tuple(target_addr)
             ).binary
         )
         reply = await self.reader.pull(socks5.Reply)
         if reply.rep is not socks5.Rep.succeeded:
-            self.writer.close()
             raise ProtocolError(f"bad reply: {reply}")
         return reply

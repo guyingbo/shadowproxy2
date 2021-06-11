@@ -147,7 +147,7 @@ class ProxyContext:
         except Exception as e:
             if app.settings.verbose > 0:
                 click.secho(f"{self.get_route()} {e}", fg="yellow")
-            return
+            await parser.close()
 
     async def ws_handler(self, ws, path):
         try:
@@ -160,11 +160,10 @@ class ProxyContext:
             self.create_task(parser.relay(remote_parser))
             self.create_task(remote_parser.relay(parser))
             await task
-            await ws.close()
         except Exception as e:
             if app.settings.verbose > 0:
                 click.secho(f"{self.get_route()} {e}", fg="yellow")
-            return
+            await parser.close()
 
     async def create_ws_server(self):
         if self.inbound_ns.transport == "wss":
@@ -179,7 +178,6 @@ class ProxyContext:
             self.ws_handler,
             self.inbound_ns.host,
             self.inbound_ns.port,
-            # create_protocol=WSInbound,
             ssl=sslcontext,
         )
         return await self.stack.enter_async_context(server)

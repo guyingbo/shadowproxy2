@@ -1,3 +1,5 @@
+from inspect import isawaitable
+
 from ..aiobuffer.buffer import create_buffer
 
 
@@ -10,26 +12,41 @@ class NullParser:
         return
 
     async def relay(self, output_parser):
-        while True:
-            try:
-                data = await self.reader.read(1024)
-            except Exception as e:
-                print(e)
-                data = None
-            if not data:
-                return
-                if (
-                    output_parser.writer.can_write_eof()
-                    and not output_parser.writer.is_closing()
-                ):
-                    output_parser.writer.write_eof()
-                output_parser.writer.close()
+        try:
+            while True:
                 try:
-                    await output_parser.writer.wait_closed()
+                    data = await self.reader.read(1024)
                 except Exception as e:
                     print(e)
-                break
-            output_parser.write(data)
+                    data = None
+                if not data:
+                    if (
+                        output_parser.writer.can_write_eof()
+                        and not output_parser.writer.is_closing()
+                    ):
+                        output_parser.writer.write_eof()
+                    if self.writer.is_closing():
+                        await output_parser.close()
+                    break
+                await output_parser.write(data)
+        except Exception:
+            await self.close()
+            raise
 
-    def write(self, data):
-        return self.writer.write(data)
+    async def write(self, data):
+        return await self._write(data, drain=True)
+
+    async def _write(self, data, drain=False):
+        r = self.writer.write(data)
+        if isawaitable(r):
+            return await r
+        if drain:
+            await self.writer.drain()
+        return r
+
+    async def close(self):
+        r = self.writer.close()
+        if isawaitable(r):
+            return await r
+        await self.writer.wait_closed()
+        return r

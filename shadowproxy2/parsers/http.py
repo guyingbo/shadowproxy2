@@ -71,12 +71,11 @@ class HTTPParser(NullParser):
             pauth = request.headers.get(b"Proxy-Authorization", None)
             httpauth = b"Basic " + base64.b64encode(b":".join(self.auth))
             if httpauth != pauth:
-                self.writer.write(
+                await self._write(
                     request.ver + b" 407 Proxy Authentication Required\r\n"
                     b"Connection: close\r\n"
                     b'Proxy-Authenticate: Basic realm="Shadowproxy Auth"\r\n\r\n'
                 )
-                self.writer.close()
                 raise ProtocolError("Unauthorized HTTP Request")
         if request.method == b"CONNECT":
             host, _, port = request.path.partition(b":")
@@ -86,18 +85,18 @@ class HTTPParser(NullParser):
             url = urlparse(request.path)
             if not url.hostname:
                 error_msg = "hostname is needed"
-                self.writer.write(
+                await self._write(
                     b"HTTP/1.1 200 OK\r\n"
                     b"Connection: close\r\n"
                     b"Content-Type: text/plain\r\n"
                     b"Content-Length: 2\r\n\r\n"
                 )
-                self.writer.write(error_msg.encode())
+                await self._write(error_msg.encode())
                 raise ProtocolError(error_msg)
             target_addr = (url.hostname.decode(), url.port or 80)
         remote_parser = await ctx.create_client(target_addr)
         if request.method == b"CONNECT":
-            self.writer.write(b"HTTP/1.1 200 Connection: Established\r\n\r\n")
+            await self._write(b"HTTP/1.1 200 Connection: Established\r\n\r\n")
         await remote_parser.init_client(target_addr)
         return remote_parser
 
@@ -115,7 +114,7 @@ class HTTPParser(NullParser):
                 base64.b64encode(b":".join(self.auth)).decode()
             )
         headers_str += "\r\n"
-        self.writer.write(headers_str.encode())
+        await self._write(headers_str.encode())
         response = await self.reader.pull(HTTPResponse)
         if response.code != b"200":
             raise ProtocolError(f"bad status code: {response.code} {response.status}")
