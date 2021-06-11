@@ -15,6 +15,7 @@ base_path = abspath(join(dirname(__file__), ".."))
 ssl_cert_path = join(base_path, "certs", "ssl_cert.pem")
 ssl_key_path = join(base_path, "certs", "ssl_key.pem")
 pycacert_path = join(base_path, "certs", "pycacert.pem")
+blacklist_path = join(base_path, "assets", "p2p_ip.txt")
 
 
 class URLParamType(click.ParamType):
@@ -44,7 +45,7 @@ def validate_urls(ctx, param, urls):
                 fg="red",
             )
             # raise click.BadParameter("haha")
-        if url.proxy == "ss" and url.username not in ("chacha20-ietf-poly1305",):
+        if url.proxy == "ss" and url.username not in ("chacha20-ietf-poly1305", None):
             raise click.BadParameter("supported ss ciphers: chacha20-ietf-poly1305")
     return urls
 
@@ -85,6 +86,13 @@ def validate_urls(ctx, param, urls):
     type=click.Path(exists=True),
     help=f"CA certificate file path, default to {pycacert_path}",
 )
+@click.option(
+    "-B",
+    "--blacklist",
+    default=blacklist_path,
+    type=click.Path(exists=True),
+    help="ip blacklist file",
+)
 @click.option("-v", "--verbose", count=True)
 def main(
     inbound_list,
@@ -93,6 +101,7 @@ def main(
     key_file,
     ca_cert,
     verbose,
+    blacklist,
 ):
     try:
         resource.setrlimit(resource.RLIMIT_NOFILE, (50000, 50000))
@@ -105,6 +114,9 @@ def main(
         ca_cert=ca_cert,
         verbose=verbose,
     )
+    if blacklist:
+        with open(blacklist, "r") as f:
+            app.blacklist = set(line.strip() for line in f)
     outbound_dict = {ns.name or str(i + 1): ns for i, ns in enumerate(outbound_list)}
     ctx_list = [
         ProxyContext(

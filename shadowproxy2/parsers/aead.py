@@ -71,3 +71,16 @@ class AEADParser(NullParser):
         self.writer.write(packet)
         addr = Addr.from_tuple(target_addr)
         self.write(addr.binary)
+
+
+class PlainParser(NullParser):
+    async def server(self, ctx):
+        addr = await self.reader.pull(Addr)
+        target_addr = (addr.host, addr.port)
+        remote_parser = await ctx.create_client(target_addr)
+        await remote_parser.init_client(target_addr)
+        return remote_parser
+
+    async def init_client(self, target_addr):
+        addr = Addr.from_tuple(target_addr)
+        self.write(addr.binary)

@@ -71,6 +71,8 @@ class ProxyContext:
         elif proxy == "socks4":
             return socks4.Socks4Parser()
         elif proxy == "ss":
+            if self.inbound_ns.username is None:
+                return aead.PlainParser()
             return aead.AEADParser(self.inbound_cipher)
         elif proxy == "http":
             ns = self.inbound_ns
@@ -88,6 +90,8 @@ class ProxyContext:
         elif proxy == "socks4":
             return socks4.Socks4Parser()
         elif proxy == "ss":
+            if self.outbound_ns.username is None:
+                return aead.PlainParser()
             return aead.AEADParser(self.outbound_cipher)
         elif proxy == "http":
             ns = self.outbound_ns
@@ -132,25 +136,35 @@ class ProxyContext:
     create_tls_server = create_tcp_server
 
     async def tcp_handler(self, reader, writer):
-        source_addr_var.set(writer.get_extra_info("peername"))
-        inbound_addr_var.set(writer.get_extra_info("sockname"))
-        parser = self.create_server_parser()
-        parser.set_rw(reader, writer)
-        remote_parser = await parser.server(self)
-        self.create_task(parser.relay(remote_parser))
-        self.create_task(remote_parser.relay(parser))
+        try:
+            source_addr_var.set(writer.get_extra_info("peername"))
+            inbound_addr_var.set(writer.get_extra_info("sockname"))
+            parser = self.create_server_parser()
+            parser.set_rw(reader, writer)
+            remote_parser = await parser.server(self)
+            self.create_task(parser.relay(remote_parser))
+            self.create_task(remote_parser.relay(parser))
+        except Exception as e:
+            if app.settings.verbose > 0:
+                click.secho(f"{self.get_route()} {e}", fg="yellow")
+            return
 
     async def ws_handler(self, ws, path):
-        source_addr_var.set(ws.remote_address)
-        inbound_addr_var.set(ws.local_address)
-        parser = self.create_server_parser()
-        parser.set_rw(None, WebsocketWriter(ws))
-        task = self.create_task(wait_recv(ws, parser.reader))
-        remote_parser = await parser.server(self)
-        self.create_task(parser.relay(remote_parser))
-        self.create_task(remote_parser.relay(parser))
-        await task
-        await ws.close()
+        try:
+            source_addr_var.set(ws.remote_address)
+            inbound_addr_var.set(ws.local_address)
+            parser = self.create_server_parser()
+            parser.set_rw(None, WebsocketWriter(ws))
+            task = self.create_task(wait_recv(ws, parser.reader))
+            remote_parser = await parser.server(self)
+            self.create_task(parser.relay(remote_parser))
+            self.create_task(remote_parser.relay(parser))
+            await task
+            await ws.close()
+        except Exception as e:
+            if app.settings.verbose > 0:
+                click.secho(f"{self.get_route()} {e}", fg="yellow")
+            return
 
     async def create_ws_server(self):
         if self.inbound_ns.transport == "wss":
@@ -187,6 +201,8 @@ class ProxyContext:
 
     async def create_client(self, target_addr):
         target_addr_var.set(target_addr)
+        if target_addr[0] in app.settings.blacklist:
+            raise Exception(f"{target_addr[0]} is blocked")
         if self.outbound_ns is None:
             transport = "tcp"
         else:
@@ -215,9 +231,11 @@ class ProxyContext:
         )
 
     async def create_tcp_client(self, target_addr):
-        ssl = None
+        sslcontext = None
         if self.outbound_ns and self.outbound_ns.transport == "tls":
-            ssl = True
+            sslcontext = True
+            # sslcontext = ssl.create_default_context()
+            # sslcontext.check_hostname = False
         if self.outbound_ns:
             host = self.outbound_ns.host
             port = self.outbound_ns.port
@@ -228,7 +246,7 @@ class ProxyContext:
                 return await asyncio.open_connection(
                     host,
                     port,
-                    ssl=ssl,
+                    ssl=sslcontext,
                 )
             except OSError as e:
                 if app.settings.verbose > 1:

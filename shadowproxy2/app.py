@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     key_file: FilePath = None
     ca_cert: FilePath = None
     verbose: int = 0
+    blacklist: set = set()
 
 
 settings = None
