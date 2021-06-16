@@ -96,6 +96,7 @@ def validate_urls(ctx, param, urls):
 @click.option(
     "--block-countries",
     type=str,
+    default="",
     help="Country code seperated by comma, only works for cloudfare+websocket mode",
 )
 @click.option("-v", "--verbose", count=True)
@@ -119,7 +120,7 @@ def main(
         key_file=key_file,
         ca_cert=ca_cert,
         verbose=verbose,
-        block_countries=set(block_countries.split(",")),
+        block_countries=set(code for code in block_countries.split(",") if code),
     )
     if blacklist:
         with open(blacklist, "r") as f:
