@@ -124,7 +124,7 @@ def main(
     )
     if blacklist:
         with open(blacklist, "r") as f:
-            app.blacklist = set(line.strip() for line in f)
+            app.settings.blacklist = set(line.strip() for line in f)
     outbound_dict = {ns.name or str(i + 1): ns for i, ns in enumerate(outbound_list)}
     ctx_list = [
         ProxyContext(
