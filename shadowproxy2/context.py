@@ -134,6 +134,9 @@ class ProxyContext:
             await parser.close()
 
     async def ws_handler(self, ws, path):
+        country_code = ws.request_headers.get("cf-ipcountry", None)
+        if country_code in app.settings.block_countries:
+            return
         try:
             source_addr_var.set(ws.remote_address)
             inbound_addr_var.set(ws.local_address)

@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     ca_cert: FilePath = None
     verbose: int = 0
     blacklist: set = set()
+    block_countries: set = set()
 
 
 settings = None

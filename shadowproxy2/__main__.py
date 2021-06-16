@@ -93,6 +93,11 @@ def validate_urls(ctx, param, urls):
     type=click.Path(exists=True),
     help="ip blacklist file",
 )
+@click.option(
+    "--block-countries",
+    type=str,
+    help="Country code seperated by comma, only works for cloudfare+websocket mode",
+)
 @click.option("-v", "--verbose", count=True)
 def main(
     inbound_list,
@@ -101,6 +106,7 @@ def main(
     key_file,
     ca_cert,
     verbose,
+    block_countries,
     blacklist,
 ):
     try:
@@ -113,6 +119,7 @@ def main(
         key_file=key_file,
         ca_cert=ca_cert,
         verbose=verbose,
+        block_countries=set(block_countries.split(",")),
     )
     if blacklist:
         with open(blacklist, "r") as f:
