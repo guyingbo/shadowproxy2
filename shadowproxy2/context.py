@@ -135,7 +135,11 @@ class ProxyContext:
 
     async def ws_handler(self, ws, path):
         country_code = ws.request_headers.get("cf-ipcountry", None)
-        if country_code in app.settings.block_countries:
+        hostname = ws.request_headers.get("host", "")
+        if (
+            country_code in app.settings.block_countries
+            and hostname not in app.settings.allow_hosts
+        ):
             return
         try:
             source_addr_var.set(ws.remote_address)

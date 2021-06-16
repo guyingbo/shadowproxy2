@@ -99,6 +99,12 @@ def validate_urls(ctx, param, urls):
     default="",
     help="Country code seperated by comma, only works for cloudfare+websocket mode",
 )
+@click.option(
+    "--allow-hosts",
+    type=str,
+    default="",
+    help="hostname seperated by comma, only workd for cloudfare+websocket mode",
+)
 @click.option("-v", "--verbose", count=True)
 def main(
     inbound_list,
@@ -108,6 +114,7 @@ def main(
     ca_cert,
     verbose,
     block_countries,
+    allow_hosts,
     blacklist,
 ):
     try:
@@ -121,6 +128,7 @@ def main(
         ca_cert=ca_cert,
         verbose=verbose,
         block_countries=set(code for code in block_countries.split(",") if code),
+        allow_hosts=set(host for host in allow_hosts.split(",") if host),
     )
     if blacklist:
         with open(blacklist, "r") as f:
