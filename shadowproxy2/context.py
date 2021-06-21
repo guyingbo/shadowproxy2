@@ -13,7 +13,7 @@ from aioquic.quic.configuration import QuicConfiguration
 
 from . import app
 from .ciphers import ChaCha20IETFPoly1305
-from .parsers import aead, http, socks4, socks5
+from .parsers import aead, http, socks4, socks5, trojan
 from .parsers.base import NullParser
 from .transport.ws import WebsocketWriter, wait_recv
 from .throttle import Throttle
@@ -63,6 +63,9 @@ class ProxyContext:
         elif proxy == "http":
             ns = self.inbound_ns
             return http.HTTPParser(ns.username, ns.password)
+        elif proxy == "trojan":
+            ns = self.inbound_ns
+            return trojan.TrojanParser(ns.username, ns.password)
         else:
             raise Exception(f"Unknown proxy type: {proxy}")
 
@@ -82,6 +85,9 @@ class ProxyContext:
         elif proxy == "http":
             ns = self.outbound_ns
             return http.HTTPParser(ns.username, ns.password)
+        if proxy == "trojan":
+            ns = self.outbound_ns
+            return trojan.TrojanParser(ns.username, ns.password)
         else:
             raise Exception(f"Unknown proxy type: {proxy}")
 

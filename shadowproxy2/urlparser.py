@@ -10,7 +10,7 @@ grammar = r"""
 url         = (transport "+")? proxy "://" (username ":" password "@")? host? ":" port
               path? ("#" pair ("," pair)* )?
 transport   = "tcp" / "kcp" / "quic" / "udp" / "tls" / "wss" / "ws"
-proxy       = "ss" / "socks5" / "socks4" / "http" / "tunnel" / "red"
+proxy       = "ss" / "socks5" / "socks4" / "http" / "tunnel" / "red" / "trojan"
 host        = ipv4 / fqdn / ipv6repr
 ipv4        = ~r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}"
 fqdn        = ~r"([0-9a-z]((-[0-9a-z])|[0-9a-z])*\.){0,4}[a-z]+"i
