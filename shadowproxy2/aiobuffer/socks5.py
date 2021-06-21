@@ -112,7 +112,7 @@ class UsernameAuth(schema.BinarySchema):
 
 
 class UsernameAuthReply(schema.BinarySchema):
-    auth_ver = schema.MustEqual(schema.u8, 5)
+    auth_ver = schema.MustEqual(schema.u8, 1)
     status = schema.MustEqual(schema.u8, 0)
 
 
