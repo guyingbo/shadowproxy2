@@ -16,7 +16,7 @@ class Socks5Parser(NullParser):
         if self.username is None or self.password is None:
             auth = None
         else:
-            auth = self.username.encode(), self.password.encode()
+            auth = self.username, self.password
         handshake = await self.reader.pull(socks5.Handshake)
         addr = socks5.Addr(1, "0.0.0.0", 0)
         if auth:
@@ -54,7 +54,7 @@ class Socks5Parser(NullParser):
         if self.username is None or self.password is None:
             auth = None
         else:
-            auth = self.username.encode(), self.password.encode()
+            auth = self.username, self.password
         await self._write(
             socks5.Handshake(
                 ..., [socks5.AuthMethod.no_auth, socks5.AuthMethod.user_auth]

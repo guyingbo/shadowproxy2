@@ -131,6 +131,8 @@ class ProxyContext:
         except Exception as e:
             if app.settings.verbose > 0:
                 click.secho(f"{self.get_route()} {e}", fg="yellow")
+            if app.settings.verbose > 1:
+                traceback.print_exc()
             await parser.close()
 
     async def ws_handler(self, ws, path):

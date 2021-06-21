@@ -111,6 +111,10 @@ class BinarySchema(metaclass=BinarySchemaMetaclass):
 FieldType = Union[Type[BinarySchema], Unit]
 
 
+class Placeholder(BinarySchema):
+    pass
+
+
 class MemberDescriptor:
     __slots__ = ("key", "member")
 
