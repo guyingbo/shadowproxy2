@@ -35,7 +35,10 @@ from hashlib import sha224
 from ..aiobuffer import buffer as schema
 from ..aiobuffer import socks5
 from .base import NullParser
-from ..iofree.exceptions import ProtocolError
+
+
+class ProtocolError(Exception):
+    ...
 
 
 class TrojanSchema(schema.BinarySchema):
