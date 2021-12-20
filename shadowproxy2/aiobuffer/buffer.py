@@ -289,11 +289,11 @@ async def _pull(self, obj):
         raise TypeError(f"unknown object type: {type(obj)}")
 
 
-async def _pull_until(self, data, *, return_tail=False):
-    data = await self.readuntil(data)
+async def _pull_until(self, end, *, return_tail=False):
+    data = await self.readuntil(end)
     if return_tail:
         return data
-    return data[: -len(data)]
+    return data[: -len(end)]
 
 
 async def _peek(self, n):
