@@ -14,7 +14,7 @@ from . import app
 from .container import Container
 from .transport.ws import WebsocketReader, WebsocketWriter
 from .utils import is_global
-from .ws_process_request import ws_process_request
+from .ws_process_request import ws_process_request, concurrent_requests
 
 QuicStreamAdapter.close = lambda self: None
 QuicStreamAdapter.get_extra_info = (

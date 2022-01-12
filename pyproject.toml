@@ -43,6 +43,23 @@ parsimonious = "^0.10.0"
 uvloop = "^0.17.0"
 
 
+[tool.poetry.group.test.dependencies]
+pytest = "^7.2.0"
+coverage = "^6.5.0"
+pytest-cov = "^4.0.0"
+
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^8.6.0"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+
+[tool.pytest.ini_options]
+addopts = "-s --verbose --doctest-modules tests shadowproxy2 --cov=shadowproxy2 --cov=tests --cov-report=term-missing --cov-report=xml"
