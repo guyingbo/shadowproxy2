@@ -10,7 +10,7 @@ grammar = r"""
 url         = (transport "+")? proxy "://" (username ":" password "@")? host? ":" port
               path? ("#" pair ("," pair)* )?
 transport   = "tcp" / "kcp" / "quic" / "udp" / "tls" / "wss" / "ws"
-proxy       = "ss" / "socks5" / "socks4" / "http" / "tunnel" / "red" / "trojan"
+proxy       = "ss" / "socks5" / "socks4" / "http" / "tunnel" / "red" / "trojan" / "plain"
 host        = ipv4 / fqdn / ipv6repr
 ipv4        = ~r"\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}"
 fqdn        = ~r"([0-9a-z]((-*[0-9a-z])|[0-9a-z])*\.){0,5}[a-z]+"i
@@ -88,9 +88,3 @@ class URLVisitor(NodeVisitor):
 
     def generic_visit(self, node, visited_children):
         return node
-
-
-if __name__ == "__main__":
-    tree = grammar.parse(sys.argv[1])
-    visitor = URLVisitor()
-    print(visitor.visit(tree))

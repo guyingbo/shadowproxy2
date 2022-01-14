@@ -24,6 +24,7 @@ class ProxyEnum(Enum):
     tunnel = "tunnel"
     red = "red"
     trojan = "trojan"
+    plain = "plain"
 
 
 rate_mapping = {

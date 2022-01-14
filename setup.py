@@ -49,6 +49,7 @@ setup(
         "prometheus-client",
         "objgraph",
         "pympler",
+        "dependency-injector",
     ],
     entry_points={"console_scripts": ["shadowproxy = shadowproxy2.__main__:main"]},
     classifiers=[
