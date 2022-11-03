@@ -6,7 +6,7 @@ ADD . .
 
 RUN apt-get update
 
-RUN apt-get install -y gcc htop procps strace iproute2 curl
+RUN apt-get install -y gcc htop procps strace iproute2 curl openssl libssl-dev
 
 RUN apt-get clean
 
@@ -20,6 +20,6 @@ RUN rm -rf /app
 
 WORKDIR /root
 
-EXPOSE 8527
+EXPOSE $PORT
 
-ENTRYPOINT ["/usr/local/bin/shadowproxy"]
+ENTRYPOINT exec /usr/local/bin/shadowproxy
