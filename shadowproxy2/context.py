@@ -64,7 +64,7 @@ class ProxyContext:
             source_addr_var.set(writer.get_extra_info("peername"))
             inbound_addr_var.set(writer.get_extra_info("sockname"))
             parser = self.container.inbound_parser()
-            parser.set_rw(reader, writer, self.container.upload_throttle())
+            parser.set_rw(reader, writer)
             remote_parser = await parser.server(self)
             self.create_task(parser.relay(remote_parser))
             self.create_task(remote_parser.relay(parser))
@@ -85,7 +85,6 @@ class ProxyContext:
             parser.set_rw(
                 WebsocketReader(ws),
                 WebsocketWriter(ws),
-                self.container.upload_throttle(),
             )
             remote_parser = await parser.server(self)
             task1 = self.create_task(parser.relay(remote_parser))
@@ -152,7 +151,7 @@ class ProxyContext:
             remote_addr_var.set(writer.get_extra_info("peername"))
             outbound_addr_var.set(writer.get_extra_info("sockname"))
         parser = self.container.outbound_parser()
-        parser.set_rw(reader, writer, self.container.download_throttle())
+        parser.set_rw(reader, writer)
         if app.settings.verbose > 0:
             print(self.get_route())
         return parser

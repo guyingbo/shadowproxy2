@@ -10,7 +10,7 @@ import asyncio
 
 class Container(containers.DeclarativeContainer):
     inbound_ns = providers.Dependency(instance_of=BoundNamespace)
-    outbound_ns = providers.Dependency(instance_of=BoundNamespace)
+    outbound_ns = providers.Dependency()
     quic_client_lock = providers.Singleton(asyncio.Lock)
     inbound_parser = providers.Selector(
         providers.Factory(lambda ns: "c1" if ns is None else "c2", inbound_ns),
