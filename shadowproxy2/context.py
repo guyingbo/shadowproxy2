@@ -1,30 +1,20 @@
 import asyncio
 import contextlib
-import socket
 import ssl
 import traceback
-import uuid
 from contextvars import ContextVar
-from functools import cached_property
-from http import HTTPStatus
-from urllib.parse import urlparse, parse_qs
 
 import click
-import objgraph
 import websockets
 from aioquic import asyncio as aio
 from aioquic.asyncio.protocol import QuicStreamAdapter
 from aioquic.quic.configuration import QuicConfiguration
-from prometheus_client import Gauge, generate_latest
-from pympler import muppy, summary
 
 from . import app
-from .ciphers import ChaCha20IETFPoly1305
-from .parsers import aead, http, socks4, socks5, trojan
-from .parsers.base import NullParser
-from .throttle import Throttle
+from .container import Container
 from .transport.ws import WebsocketReader, WebsocketWriter
 from .utils import is_global
+from .ws_process_request import ws_process_request
 
 QuicStreamAdapter.close = lambda self: None
 QuicStreamAdapter.get_extra_info = (
@@ -35,117 +25,16 @@ inbound_addr_var = ContextVar("inbound_addr", default=("", 0))
 outbound_addr_var = ContextVar("outbound_addr", default=("", 0))
 remote_addr_var = ContextVar("remote_addr", default=("", 0))
 target_addr_var = ContextVar("target_addr", default=("", 0))
-concurrent_requests = Gauge(
-    "concurrent_requests",
-    "concurrent requests",
-    labelnames=["instance_id", "hostname"],
-).labels(uuid.getnode(), socket.gethostname())
-task_number = Gauge(
-    "task_number",
-    "task number",
-    labelnames=["instance_id", "hostname"],
-).labels(uuid.getnode(), socket.gethostname())
-task_number.set_function(lambda: len(asyncio.all_tasks()))
-obj_count = Gauge(
-    "obj_count",
-    "obj count by type",
-    labelnames=["type"],
-)
-
-
-async def ws_process_request(path, request_headers):
-    if path == "/metrics":
-        for label, value in objgraph.most_common_types():
-            obj_count.labels(label).set(value)
-        return HTTPStatus.OK, [], generate_latest()
-    elif path == "/summary":
-        s = summary.summarize(muppy.get_objects())
-        return HTTPStatus.OK, [], ("\n".join(summary.format_(s))).encode()
-    elif path == "/headers":
-        return (
-            HTTPStatus.OK,
-            [],
-            ("\n".join(f"{k}: {v}" for k, v in request_headers.items())).encode(),
-        )
-    elif path.startswith("/health_check") and app.settings.enable_health_check:
-        pr = urlparse(path)
-        query_dict = parse_qs(pr.query)
-        uri = query_dict.get("uri")
-        if not uri:
-            return HTTPStatus.BAD_REQUEST, [], b"no uri"
-        from .client import Client
-
-        try:
-            client = Client(uri[0])
-            await client.make_httpbin_request()
-        except Exception as e:
-            if app.settings.verbose > 1:
-                traceback.print_exc()
-            return HTTPStatus.SERVICE_UNAVAILABLE, [], str(e).encode()
-        return HTTPStatus.OK, [], b"ok"
 
 
 class ProxyContext:
     stack: contextlib.AsyncExitStack
 
     def __init__(self, inbound_ns, outbound_ns):
+        self.container = Container(inbound_ns=inbound_ns, outbound_ns=outbound_ns)
         self.inbound_ns = inbound_ns
         self.outbound_ns = outbound_ns
         self.quic_outbound = None
-
-    @cached_property
-    def quic_client_lock(self):
-        return asyncio.Lock()
-
-    @cached_property
-    def inbound_cipher(self):
-        return ChaCha20IETFPoly1305(self.inbound_ns.password)
-
-    @cached_property
-    def outbound_cipher(self):
-        return ChaCha20IETFPoly1305(self.outbound_ns.password)
-
-    def create_server_parser(self):
-        proxy = self.inbound_ns.proxy
-        if proxy == "socks5":
-            ns = self.inbound_ns
-            return socks5.Socks5Parser(ns.username, ns.password)
-        elif proxy == "socks4":
-            return socks4.Socks4Parser()
-        elif proxy == "ss":
-            if self.inbound_ns.username is None:
-                return aead.PlainParser()
-            return aead.AEADParser(self.inbound_cipher)
-        elif proxy == "http":
-            ns = self.inbound_ns
-            return http.HTTPParser(ns.username, ns.password)
-        elif proxy == "trojan":
-            ns = self.inbound_ns
-            return trojan.TrojanParser(ns.username, ns.password)
-        else:
-            raise Exception(f"Unknown proxy type: {proxy}")
-
-    def create_client_parser(self):
-        if self.outbound_ns is None:
-            return NullParser()
-        proxy = self.outbound_ns.proxy
-        if proxy == "socks5":
-            ns = self.outbound_ns
-            return socks5.Socks5Parser(ns.username, ns.password)
-        elif proxy == "socks4":
-            return socks4.Socks4Parser()
-        elif proxy == "ss":
-            if self.outbound_ns.username is None:
-                return aead.PlainParser()
-            return aead.AEADParser(self.outbound_cipher)
-        elif proxy == "http":
-            ns = self.outbound_ns
-            return http.HTTPParser(ns.username, ns.password)
-        if proxy == "trojan":
-            ns = self.outbound_ns
-            return trojan.TrojanParser(ns.username, ns.password)
-        else:
-            raise Exception(f"Unknown proxy type: {proxy}")
 
     async def create_server(self):
         return await getattr(self, f"create_{self.inbound_ns.transport}_server")()
@@ -169,24 +58,13 @@ class ProxyContext:
 
     create_tls_server = create_tcp_server
 
-    def get_upload_throttle(self):
-        throttle = None
-        if self.inbound_ns.ul:
-            throttle = Throttle(self.inbound_ns.ul * 1024)
-        return throttle
-
-    def get_download_throttle(self):
-        throttle = None
-        if self.inbound_ns and self.inbound_ns.dl:
-            throttle = Throttle(self.inbound_ns.dl * 1024)
-        return throttle
-
     async def tcp_handler(self, reader, writer):
+        parser = None
         try:
             source_addr_var.set(writer.get_extra_info("peername"))
             inbound_addr_var.set(writer.get_extra_info("sockname"))
-            parser = self.create_server_parser()
-            parser.set_rw(reader, writer, self.get_upload_throttle())
+            parser = self.container.inbound_parser()
+            parser.set_rw(reader, writer)
             remote_parser = await parser.server(self)
             self.create_task(parser.relay(remote_parser))
             self.create_task(remote_parser.relay(parser))
@@ -195,16 +73,18 @@ class ProxyContext:
                 click.secho(f"{self.get_route()} {e}", fg="yellow")
             if app.settings.verbose > 1:
                 traceback.print_exc()
-            await parser.close()
+            if parser:
+                await parser.close()
 
     async def ws_handler(self, ws, path):
         concurrent_requests.inc()
         try:
             source_addr_var.set(ws.remote_address)
             inbound_addr_var.set(ws.local_address)
-            parser = self.create_server_parser()
+            parser = self.container.inbound_parser()
             parser.set_rw(
-                WebsocketReader(ws), WebsocketWriter(ws), self.get_upload_throttle()
+                WebsocketReader(ws),
+                WebsocketWriter(ws),
             )
             remote_parser = await parser.server(self)
             task1 = self.create_task(parser.relay(remote_parser))
@@ -270,8 +150,8 @@ class ProxyContext:
         if not isinstance(writer, WebsocketWriter):
             remote_addr_var.set(writer.get_extra_info("peername"))
             outbound_addr_var.set(writer.get_extra_info("sockname"))
-        parser = self.create_client_parser()
-        parser.set_rw(reader, writer, self.get_download_throttle())
+        parser = self.container.outbound_parser()
+        parser.set_rw(reader, writer)
         if app.settings.verbose > 0:
             print(self.get_route())
         return parser
@@ -350,7 +230,7 @@ class ProxyContext:
     create_wss_client = create_ws_client
 
     async def create_quic_client(self, target_addr):
-        async with self.quic_client_lock:
+        async with self.container.quic_client_lock():
             if self.quic_outbound is None:
                 configuration = QuicConfiguration()
                 configuration.load_verify_locations(str(app.settings.ca_cert))

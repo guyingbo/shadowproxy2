@@ -16,9 +16,7 @@ class Client:
 
     def __init__(self, uri):
         self.uri = uri
-        tree = grammar.parse(uri)
-        visitor = URLVisitor()
-        self.outbound_ns = visitor.visit(tree)
+        self.outbound_ns = URLVisitor().visit(grammar.parse(uri))
 
     async def connect(self, host: str, port: int):
         ctx = ProxyContext(None, self.outbound_ns)

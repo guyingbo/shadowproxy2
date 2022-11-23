@@ -1,25 +1,27 @@
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 WORKDIR /app
 
-ADD . .
-
 RUN apt-get update
 
-RUN apt-get install -y gcc htop procps strace iproute2 curl
+RUN apt-get install -y gcc htop procps strace iproute2 curl openssl libssl-dev
 
 RUN apt-get clean
 
-RUN python -m pip install -U pip
+RUN python -m pip install -U pip setuptools
 
-RUN python -m pip install py-spy
+RUN python -m pip install py-spy poetry
 
-RUN python setup.py install
+ADD . .
 
-RUN rm -rf /app
+RUN poetry build
+
+RUN python -m pip install dist/shadowproxy2-*.tar.gz
+
+# RUN rm -rf /app
 
 WORKDIR /root
 
-EXPOSE 8527
-
 ENTRYPOINT ["/usr/local/bin/shadowproxy"]
+
+CMD ["--help"]
